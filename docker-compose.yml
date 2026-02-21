@@ -1,0 +1,50 @@
+name: Trans
+
+services:
+  api-gateway:
+    build: ./Backend/api-gateway
+    image: api-gateway
+    container_name: api-gateway
+    ports:
+      - 3000:3000
+    networks:
+      - TransNetwork
+
+  auth-service:
+    build: ./Backend/auth-service
+    image: auth-service
+    container_name: auth-service
+    networks:
+      - TransNetwork
+  
+  campaign-service:
+    build: ./Backend/campaign-service
+    image: campaign-service
+    container_name: campaign-service
+    networks:
+      - TransNetwork
+
+  notification-service:
+    build: ./Backend/notification-service
+    image: notification-service
+    container_name: notification-service
+    networks:
+      - TransNetwork
+
+  user-service:
+    build: ./Backend/user-service
+    image: user-service
+    container_name: user-service
+    networks:
+      - TransNetwork
+
+  wallet-service:
+    build: ./Backend/wallet-service
+    image: wallet-service
+    container_name: wallet
+    networks:
+      - TransNetwork
+
+networks:
+  TransNetwork:
+    driver: bridge
