@@ -1,0 +1,11 @@
+Dockerfile
+.dockerignore
+node_modules
+dist
+test
+coverage
+.git
+.gitignore
+.prettierrc
+*.md
+eslint.config.mjs
