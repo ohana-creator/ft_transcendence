@@ -1,4 +1,5 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
+import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -9,6 +10,10 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
 
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  
   const config = new DocumentBuilder()
     .setTitle('Vaks API Module #1')
     .setDescription('VAKS Auth Module Web Application API')
