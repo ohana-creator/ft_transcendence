@@ -4,6 +4,10 @@ WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci
+
+COPY prisma ./prisma
+RUN npx prisma generate
+
 COPY . .
 RUN npm run build
 
@@ -15,9 +19,12 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/generated ./generated
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
 USER node
 
-#EXPOSE 3000
-
-CMD ["node", "dist/main"]
+CMD ["./entrypoint.sh"]

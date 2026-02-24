@@ -1,0 +1,362 @@
+# ============================================================
+# Docker Compose para DESENVOLVIMENTO
+# Todos os serviços rodam dentro dos containers com hot-reload.
+# O código fonte é montado via bind mount — edite no VS Code,
+# o NestJS detecta a mudança e recompila automaticamente.
+#
+# Uso:
+#   docker compose -f docker-compose.dev.yml up --build
+#   docker compose -f docker-compose.dev.yml up --build auth-service authDb redis
+#   docker compose -f docker-compose.dev.yml down
+# ============================================================
+name: trans-dev
+
+services:
+  # ═══════════════════════════════════════════════════════════
+  #  API GATEWAY (sem banco de dados)
+  # ═══════════════════════════════════════════════════════════
+  api-gateway:
+    build:
+      context: ./Backend/api-gateway
+      dockerfile: Dockerfile.dev
+    container_name: api-gateway-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      JWT_SECRET: change_me
+      JWT_EXPIRATION: 3600
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: change_me
+      AUTH_SERVICE_URL: http://auth-service:3001
+      CAMPAIGN_SERVICE_URL: http://campaign-service:3002
+      NOTIFICATION_SERVICE_URL: http://notification-service:3003
+      USER_SERVICE_URL: http://user-service:3004
+      WALLET_SERVICE_URL: http://wallet-service:3005
+    volumes:
+      - ./Backend/api-gateway/src:/app/src
+      - ./Backend/api-gateway/test:/app/test
+      - ./Backend/api-gateway/tsconfig.json:/app/tsconfig.json
+      - ./Backend/api-gateway/tsconfig.build.json:/app/tsconfig.build.json
+      - ./Backend/api-gateway/nest-cli.json:/app/nest-cli.json
+    networks:
+      - devnet
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════
+  #  AUTH SERVICE
+  # ═══════════════════════════════════════════════════════════
+  authDb:
+    image: postgres:16
+    container_name: authDb-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - devnet
+
+  auth-service:
+    build:
+      context: ./Backend/auth-service
+      dockerfile: Dockerfile.dev
+    container_name: auth-service-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DB_HOST: authDb
+      DB_PORT: 5432
+      DB_NAME: auth
+      DB_USER: auth_user
+      DB_PASSWORD: change_me
+      JWT_SECRET: change_me
+      JWT_EXPIRATION: 3600
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: change_me
+    volumes:
+      - ./Backend/auth-service/src:/app/src
+      - ./Backend/auth-service/test:/app/test
+      - ./Backend/auth-service/prisma:/app/prisma
+      - ./Backend/auth-service/tsconfig.json:/app/tsconfig.json
+      - ./Backend/auth-service/tsconfig.build.json:/app/tsconfig.build.json
+      - ./Backend/auth-service/nest-cli.json:/app/nest-cli.json
+      - ./Backend/auth-service/prisma.config.ts:/app/prisma.config.ts
+    networks:
+      - devnet
+    depends_on:
+      authDb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════
+  #  CAMPAIGN SERVICE
+  # ═══════════════════════════════════════════════════════════
+  campaignDb:
+    image: postgres:16
+    container_name: campaignDb-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: campaign
+      POSTGRES_USER: campaign_user
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5433:5432"
+    volumes:
+      - campaign_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campaign_user -d campaign"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - devnet
+
+  campaign-service:
+    build:
+      context: ./Backend/campaign-service
+      dockerfile: Dockerfile.dev
+    container_name: campaign-service-dev
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DB_HOST: campaignDb
+      DB_PORT: 5432
+      DB_NAME: campaign
+      DB_USER: campaign_user
+      DB_PASSWORD: change_me
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: change_me
+    volumes:
+      - ./Backend/campaign-service/src:/app/src
+      - ./Backend/campaign-service/test:/app/test
+      - ./Backend/campaign-service/tsconfig.json:/app/tsconfig.json
+      - ./Backend/campaign-service/tsconfig.build.json:/app/tsconfig.build.json
+      - ./Backend/campaign-service/nest-cli.json:/app/nest-cli.json
+    networks:
+      - devnet
+    depends_on:
+      campaignDb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════
+  #  NOTIFICATION SERVICE
+  # ═══════════════════════════════════════════════════════════
+  notificationDb:
+    image: postgres:16
+    container_name: notificationDb-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: notification
+      POSTGRES_USER: notification_user
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5434:5432"
+    volumes:
+      - notification_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notification_user -d notification"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - devnet
+
+  notification-service:
+    build:
+      context: ./Backend/notification-service
+      dockerfile: Dockerfile.dev
+    container_name: notification-service-dev
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DB_HOST: notificationDb
+      DB_PORT: 5432
+      DB_NAME: notification
+      DB_USER: notification_user
+      DB_PASSWORD: change_me
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: change_me
+    volumes:
+      - ./Backend/notification-service/src:/app/src
+      - ./Backend/notification-service/test:/app/test
+      - ./Backend/notification-service/tsconfig.json:/app/tsconfig.json
+      - ./Backend/notification-service/tsconfig.build.json:/app/tsconfig.build.json
+      - ./Backend/notification-service/nest-cli.json:/app/nest-cli.json
+    networks:
+      - devnet
+    depends_on:
+      notificationDb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════
+  #  USER SERVICE
+  # ═══════════════════════════════════════════════════════════
+  userDb:
+    image: postgres:16
+    container_name: userDb-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5435:5432"
+    volumes:
+      - user_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user -d user_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - devnet
+
+  user-service:
+    build:
+      context: ./Backend/user-service
+      dockerfile: Dockerfile.dev
+    container_name: user-service-dev
+    restart: unless-stopped
+    ports:
+      - "3004:3004"
+    environment:
+      NODE_ENV: development
+      PORT: 3004
+      DB_HOST: userDb
+      DB_PORT: 5432
+      DB_NAME: user_db
+      DB_USER: user_user
+      DB_PASSWORD: change_me
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: change_me
+    volumes:
+      - ./Backend/user-service/src:/app/src
+      - ./Backend/user-service/test:/app/test
+      - ./Backend/user-service/tsconfig.json:/app/tsconfig.json
+      - ./Backend/user-service/tsconfig.build.json:/app/tsconfig.build.json
+      - ./Backend/user-service/nest-cli.json:/app/nest-cli.json
+    networks:
+      - devnet
+    depends_on:
+      userDb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════
+  #  WALLET SERVICE
+  # ═══════════════════════════════════════════════════════════
+  walletDb:
+    image: postgres:16
+    container_name: walletDb-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wallet
+      POSTGRES_USER: wallet_user
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5436:5432"
+    volumes:
+      - wallet_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wallet_user -d wallet"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - devnet
+
+  wallet-service:
+    build:
+      context: ./Backend/wallet-service
+      dockerfile: Dockerfile.dev
+    container_name: wallet-service-dev
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    environment:
+      NODE_ENV: development
+      PORT: 3005
+      DB_HOST: walletDb
+      DB_PORT: 5432
+      DB_NAME: wallet
+      DB_USER: wallet_user
+      DB_PASSWORD: change_me
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: change_me
+    volumes:
+      - ./Backend/wallet-service/src:/app/src
+      - ./Backend/wallet-service/test:/app/test
+      - ./Backend/wallet-service/tsconfig.json:/app/tsconfig.json
+      - ./Backend/wallet-service/tsconfig.build.json:/app/tsconfig.build.json
+      - ./Backend/wallet-service/nest-cli.json:/app/nest-cli.json
+    networks:
+      - devnet
+    depends_on:
+      walletDb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════
+  #  REDIS
+  # ═══════════════════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    restart: unless-stopped
+    command: redis-server --requirepass change_me
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "change_me", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - devnet
+
+volumes:
+  auth_data_dev:
+  campaign_data_dev:
+  notification_data_dev:
+  user_data_dev:
+  wallet_data_dev:
+
+networks:
+  devnet:
+    driver: bridge
