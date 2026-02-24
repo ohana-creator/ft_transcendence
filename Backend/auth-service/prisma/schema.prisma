@@ -19,6 +19,7 @@ model User {
   id             Int          @id @default(autoincrement())
   email          String       @unique
   username       String       @unique
+  fullName       String
   hashedPassword String?
   googleId       String?      @unique
   twoFASecret    String?
