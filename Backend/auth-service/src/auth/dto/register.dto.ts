@@ -21,11 +21,6 @@ export class RegisterDto
     username!: string;
 
     @IsString()
-    @MinLength(3)
-    @MaxLength(30)
-    fullName!: string;
-
-    @IsString()
     @MinLength(6)
     @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/)
     password!: string;
