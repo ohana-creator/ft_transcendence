@@ -16,26 +16,16 @@ datasource db {
 }
 
 model User {
-  id             Int          @id @default(autoincrement())
+  id             String       @id @default(uuid())
   email          String       @unique
   username       String       @unique
   hashedPassword String?
   googleId       String?      @unique
   twoFASecret    String?
   twoFAEnabled   Boolean      @default(false)
-  authProvider   AuthProvider  @default(LOCAL)
+  authProvider   AuthProvider @default(LOCAL)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  sessions       Session[]
-}
-
-model Session {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
 }
 
 enum AuthProvider {
