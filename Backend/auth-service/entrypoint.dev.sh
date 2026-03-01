@@ -7,6 +7,11 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_PASSWORD" ]; then
   echo "✔ DATABASE_URL built from environment variables"
 fi
 
+if [ -n "$REDIS_HOST" ] && [ -n "$REDIS_PASSWORD" ]; then
+  export REDIS_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}"
+  echo "✔ REDIS_URL built from environment variables"
+fi
+
 # ── Prisma: generate client + apply migrations ──────────────
 if [ -f "prisma/schema.prisma" ]; then
   echo "⏳ Running prisma generate..."
