@@ -17,7 +17,6 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
-import { FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -66,7 +65,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout and invalidate current token' })
   @ApiResponse({ status: 204, description: 'Logged out successfully' })
-  async logout(@Req() req: FastifyRequest) {
+  async logout(@Req() req) {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (token) {
       await this.authService.logout(token);
@@ -152,7 +151,7 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Google OAuth callback — exchanges code for token' })
-  async googleCallback(@Req() req: any, @Res() reply: FastifyReply) {
+  async googleCallback(@Req() req: any, @Res() reply) {
     const { token } = await this.authService.handleGoogleUser(req.user);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);

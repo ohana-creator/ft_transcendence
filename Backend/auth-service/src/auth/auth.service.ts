@@ -14,7 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { Prisma } from '../../generated/prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { authenticator } from 'otplib';
+import * as otplib from 'otplib';
 import * as QRCode from 'qrcode';
 
 @Injectable()
@@ -208,18 +208,18 @@ export class AuthService {
       throw new BadRequestException('2FA is already enabled');
     }
 
-    const secret = authenticator.generateSecret();
+    const secret = otplib.generateSecret();
 
     await this.prisma.user.update({
       where: { id: userId },
       data: { twoFASecret: secret },
     });
 
-    const otpauthUrl = authenticator.keyuri(
-      user.email,
-      'ft_transcendence',
+    const otpauthUrl = otplib.generateURI({
+      issuer: 'ft_transcendence',
+      label: user.email,
       secret,
-    );
+    });
     const qrCodeUrl = await QRCode.toDataURL(otpauthUrl);
 
     return { success: true, data: { secret, qrCodeUrl } };
@@ -236,10 +236,11 @@ export class AuthService {
       throw new BadRequestException('2FA setup not initiated');
     }
 
-    const isValid = authenticator.verify({
+    const verification = await otplib.verify({
       token: code,
       secret: user.twoFASecret,
     });
+    const isValid = verification.valid;
 
     if (!isValid) {
       throw new UnauthorizedException('Invalid 2FA code');
@@ -266,10 +267,11 @@ export class AuthService {
       throw new BadRequestException('2FA is not enabled');
     }
 
-    const isValid = authenticator.verify({
+    const verification = await otplib.verify({
       token: code,
       secret: user.twoFASecret,
     });
+    const isValid = verification.valid;
 
     if (!isValid) {
       throw new UnauthorizedException('Invalid 2FA code');
@@ -311,10 +313,11 @@ export class AuthService {
       );
     }
 
-    const isValid = authenticator.verify({
+    const verification = await otplib.verify({
       token: code,
       secret: user.twoFASecret,
     });
+    const isValid = verification.valid;
 
     if (!isValid) {
       throw new UnauthorizedException('Invalid 2FA code');

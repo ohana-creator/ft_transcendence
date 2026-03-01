@@ -42,6 +42,7 @@ export class RedisService implements OnModuleDestroy {
       'payload',
       JSON.stringify(data),
     );
+    if (!id) throw new Error(`Failed to add to stream ${stream}`);
     this.logger.log(`Added to stream ${stream} (id: ${id})`);
     return id;
   }
