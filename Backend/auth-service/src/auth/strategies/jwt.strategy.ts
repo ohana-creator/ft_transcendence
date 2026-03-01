@@ -1,30 +1,48 @@
-import { Injectable } from "@nestjs/common";
-import { PassportStrategy } from "@nestjs/passport"
-import { ExtractJwt , Strategy } from "passport-jwt"
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { RedisService } from '../../redis.service';
 
-export interface   JwtInterface
-{
-    sub: string;
-    email:  string;
+export interface JwtPayload {
+  sub: string;
+  email: string;
+  username: string;
+  jti: string;
+  isTwoFA?: boolean;
 }
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy)
-{
-    constructor()
-    {
-        super({
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-            ignoreExpiration: false,
-            secretOrKey: process.env.JWT_SECRET || 'default_pass',
-        });
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
+  ) {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'default_pass',
+    });
+  }
+
+  async validate(payload: JwtPayload) {
+    // Reject 2FA temp tokens — they are not full access tokens
+    if (payload.isTwoFA) {
+      throw new UnauthorizedException('Invalid token type');
     }
 
-    async validate(payload: JwtInterface)
-    {
-        return ({
-            userId: payload.sub,
-            email: payload.email
-        });
+    // Check Redis blacklist
+    if (payload.jti) {
+      const isBlacklisted = await this.redisService.isTokenBlacklisted(payload.jti);
+      if (isBlacklisted) {
+        throw new UnauthorizedException('Token has been revoked');
+      }
     }
+
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      username: payload.username,
+    };
+  }
 }
