@@ -92,6 +92,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: http://localhost:3001/auth/google/callback
+      FRONTEND_URL: http://localhost:3000
     volumes:
       - ./Backend/auth-service/src:/app/src
       - ./Backend/auth-service/test:/app/test
