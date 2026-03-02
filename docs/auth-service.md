@@ -1,9 +1,9 @@
 # Auth Service — Documentação Técnica Completa
 
-> **Serviço:** `auth-service`  
-> **Framework:** NestJS 11 + Fastify  
-> **ORM:** Prisma 7 + PostgreSQL 16  
-> **Porta:** `3001`  
+> **Serviço:** `auth-service`
+> **Framework:** NestJS 11 + Fastify
+> **ORM:** Prisma 7 + PostgreSQL 16
+> **Porta:** `3001`
 > **Swagger:** `http://localhost:3001/docs`
 
 ---
@@ -39,14 +39,14 @@ O auth-service é um microserviço responsável exclusivamente por **identidade 
 
 ### Responsabilidades
 
-| Área | Descrição |
-|------|-----------|
-| **Registo local** | Cria conta com email + username + password (bcrypt) |
-| **Login local** | Autentica via email/username + password, emite JWT |
-| **OAuth Google** | Registo/login via conta Google (Passport strategy) |
-| **2FA (TOTP)** | Setup, verificação e validação de códigos Google Authenticator |
-| **Logout** | Invalidação de tokens via blacklist no Redis |
-| **Comunicação inter-serviços** | Publica eventos em Redis Streams (`user.created`) |
+| Área                                   | Descrição                                                         |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| **Registo local**                 | Cria conta com email + username + password (bcrypt)                 |
+| **Login local**                   | Autentica via email/username + password, emite JWT                  |
+| **OAuth Google**                  | Registo/login via conta Google (Passport strategy)                  |
+| **2FA (TOTP)**                    | Setup, verificação e validação de códigos Google Authenticator |
+| **Logout**                        | Invalidação de tokens via blacklist no Redis                      |
+| **Comunicação inter-serviços** | Publica eventos em Redis Streams (`user.created`)                 |
 
 ### Stack Tecnológica
 
@@ -142,18 +142,18 @@ enum AuthProvider {
 
 ### Tabela `User` — Campo a campo
 
-| Campo | Tipo | Constraints | Explicação |
-|-------|------|-------------|------------|
-| `id` | `String` | `@id @default(uuid())` | **UUID v4** gerado automaticamente pelo Postgres. Escolhido em vez de `Int autoincrement` para evitar IDs sequenciais previsíveis e facilitar a comunicação entre microserviços (não depende de sequências locais). |
-| `email` | `String` | `@unique` | Email do utilizador. Constraint `UNIQUE` a nível de BD — dois utilizadores nunca podem partilhar o mesmo email. Usado como identificador de login. |
-| `username` | `String` | `@unique` | Nome de exibição. Também `UNIQUE`. Validado no DTO para aceitar apenas `[a-zA-Z0-9_]{3,30}`. |
-| `hashedPassword` | `String?` | nullable | Hash bcrypt da password (ex: `$2b$10$xyz...`). É **opcional** (`?`) porque utilizadores que se registam via Google OAuth **não têm password** — autenticam-se exclusivamente com o Google. Nunca armazena a password em texto. |
-| `googleId` | `String?` | `@unique`, nullable | Identificador único atribuído pelo Google (ex: `"109876543210"`). Opcional porque utilizadores locais não o têm. O constraint `UNIQUE` impede que dois utilizadores apontem para a mesma conta Google. |
-| `twoFASecret` | `String?` | nullable | Secret TOTP gerado durante o setup do 2FA (ex: `"JBSWY3DPEHPK3PXP"`). Usado pelo `otplib` para gerar e validar códigos de 6 dígitos. Só existe se o utilizador iniciou o setup do 2FA. |
-| `twoFAEnabled` | `Boolean` | `@default(false)` | Flag: `true` = o login requer código TOTP; `false` = login normal. Só muda para `true` após o utilizador completar com sucesso `POST /auth/2fa/verify`. |
-| `authProvider` | `AuthProvider` | `@default(LOCAL)` | Enum que indica **como** o utilizador se registou: `LOCAL` (email + password) ou `GOOGLE` (OAuth). Define se a password é requerida ou não. |
-| `createdAt` | `DateTime` | `@default(now())` | Timestamp de criação, gerado automaticamente pelo PostgreSQL. |
-| `updatedAt` | `DateTime` | `@updatedAt` | Timestamp atualizado automaticamente pelo Prisma em cada `update()`. |
+| Campo              | Tipo             | Constraints              | Explicação                                                                                                                                                                                                                                      |
+| ------------------ | ---------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | `String`       | `@id @default(uuid())` | **UUID v4** gerado automaticamente pelo Postgres. Escolhido em vez de `Int autoincrement` para evitar IDs sequenciais previsíveis e facilitar a comunicação entre microserviços (não depende de sequências locais).                 |
+| `email`          | `String`       | `@unique`              | Email do utilizador. Constraint `UNIQUE` a nível de BD — dois utilizadores nunca podem partilhar o mesmo email. Usado como identificador de login.                                                                                            |
+| `username`       | `String`       | `@unique`              | Nome de exibição. Também `UNIQUE`. Validado no DTO para aceitar apenas `[a-zA-Z0-9_]{3,30}`.                                                                                                                                               |
+| `hashedPassword` | `String?`      | nullable                 | Hash bcrypt da password (ex:`$2b$10$xyz...`). É **opcional** (`?`) porque utilizadores que se registam via Google OAuth **não têm password** — autenticam-se exclusivamente com o Google. Nunca armazena a password em texto. |
+| `googleId`       | `String?`      | `@unique`, nullable    | Identificador único atribuído pelo Google (ex:`"109876543210"`). Opcional porque utilizadores locais não o têm. O constraint `UNIQUE` impede que dois utilizadores apontem para a mesma conta Google.                                     |
+| `twoFASecret`    | `String?`      | nullable                 | Secret TOTP gerado durante o setup do 2FA (ex:`"JBSWY3DPEHPK3PXP"`). Usado pelo `otplib` para gerar e validar códigos de 6 dígitos. Só existe se o utilizador iniciou o setup do 2FA.                                                      |
+| `twoFAEnabled`   | `Boolean`      | `@default(false)`      | Flag:`true` = o login requer código TOTP; `false` = login normal. Só muda para `true` após o utilizador completar com sucesso `POST /auth/2fa/verify`.                                                                                 |
+| `authProvider`   | `AuthProvider` | `@default(LOCAL)`      | Enum que indica**como** o utilizador se registou: `LOCAL` (email + password) ou `GOOGLE` (OAuth). Define se a password é requerida ou não.                                                                                            |
+| `createdAt`      | `DateTime`     | `@default(now())`      | Timestamp de criação, gerado automaticamente pelo PostgreSQL.                                                                                                                                                                                   |
+| `updatedAt`      | `DateTime`     | `@updatedAt`           | Timestamp atualizado automaticamente pelo Prisma em cada `update()`.                                                                                                                                                                            |
 
 ### Enum `AuthProvider`
 
@@ -166,11 +166,11 @@ Enum PostgreSQL nativo — a coluna só aceita estes dois valores, garantindo in
 
 ### Cenários de preenchimento
 
-| Cenário | `hashedPassword` | `googleId` | `authProvider` |
-|---------|------------------|------------|----------------|
-| Registo local | `"$2b$10$..."` | `null` | `LOCAL` |
-| Registo via Google | `null` | `"109876..."` | `GOOGLE` |
-| Utilizador local que vinculou Google | `"$2b$10$..."` | `"109876..."` | `LOCAL` |
+| Cenário                             | `hashedPassword` | `googleId`    | `authProvider` |
+| ------------------------------------ | ------------------ | --------------- | ---------------- |
+| Registo local                        | `"$2b$10$..."`   | `null`        | `LOCAL`        |
+| Registo via Google                   | `null`           | `"109876..."` | `GOOGLE`       |
+| Utilizador local que vinculou Google | `"$2b$10$..."`   | `"109876..."` | `LOCAL`        |
 
 ### Nota sobre a ausência da tabela Session
 
@@ -276,25 +276,20 @@ async function bootstrap() {
 
 ### Explicação detalhada
 
-1. **`NestFactory.create<NestFastifyApplication>`**  
-   Cria a aplicação NestJS usando o **Fastify** como HTTP server (não Express). O Fastify é ~2x mais rápido em benchmarks e tem melhor suporte para TypeScript. A opção `cors: true` ativa CORS globalmente.
+1. **`NestFactory.create<NestFastifyApplication>`**Cria a aplicação NestJS usando o **Fastify** como HTTP server (não Express). O Fastify é ~2x mais rápido em benchmarks e tem melhor suporte para TypeScript. A opção `cors: true` ativa CORS globalmente.
+2. **`ValidationPipe({ whitelist: true, transform: true })`**
 
-2. **`ValidationPipe({ whitelist: true, transform: true })`**  
    - `whitelist: true` → Remove automaticamente qualquer propriedade do body que **não** esteja definida no DTO. Protege contra mass assignment.
    - `transform: true` → Converte automaticamente os tipos do body para os tipos definidos no DTO (ex: `"123"` → `123` se o DTO espera `number`).
+3. **`ClassSerializerInterceptor`**Permite usar decorators como `@Exclude()` nas entidades para omitir campos automaticamente nas respostas (ex: `hashedPassword`). Usa o `Reflector` internamente para ler metadados.
+4. **Swagger (`DocumentBuilder`)**Configura a documentação automática OpenAPI:
 
-3. **`ClassSerializerInterceptor`**  
-   Permite usar decorators como `@Exclude()` nas entidades para omitir campos automaticamente nas respostas (ex: `hashedPassword`). Usa o `Reflector` internamente para ler metadados.
-
-4. **Swagger (`DocumentBuilder`)**  
-   Configura a documentação automática OpenAPI:
    - Título: "Auth Service API"
    - Autenticação: `Bearer` JWT
    - Tag: "Auth"
    - URL: `http://localhost:3001/docs`
    - `persistAuthorization: true` → O Swagger UI guarda o token entre reloads.
-
-5. **`app.listen('0.0.0.0')`**  
+5. **`app.listen('0.0.0.0')`**
    Escuta em todas as interfaces de rede. Necessário dentro de Docker — se ouvisse apenas `127.0.0.1`, não seria acessível fora do container.
 
 ---
@@ -319,12 +314,12 @@ export class AppModule {}
 
 ### Explicação detalhada
 
-| Import | Propósito |
-|--------|-----------|
-| `ConfigModule.forRoot({ isGlobal: true })` | Carrega variáveis de ambiente para toda a aplicação. `isGlobal: true` → não precisa ser importado em cada módulo individualmente. Permite usar `ConfigService.get('JWT_SECRET')` em qualquer provider. |
-| `ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }])` | Rate limiting global: máximo **30 requests por minuto** por IP. Protege contra brute-force. O `POST /auth/login` tem um limite ainda mais restrito (5/min) definido no controller. |
-| `AuthModule` | Módulo de autenticação — contém toda a lógica de auth, JWT, strategies. |
-| `PrismaModule` | Módulo global de base de dados — exporta `PrismaService`. |
+| Import                                                   | Propósito                                                                                                                                                                                                      |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConfigModule.forRoot({ isGlobal: true })`             | Carrega variáveis de ambiente para toda a aplicação.`isGlobal: true` → não precisa ser importado em cada módulo individualmente. Permite usar `ConfigService.get('JWT_SECRET')` em qualquer provider. |
+| `ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }])` | Rate limiting global: máximo**30 requests por minuto** por IP. Protege contra brute-force. O `POST /auth/login` tem um limite ainda mais restrito (5/min) definido no controller.                      |
+| `AuthModule`                                           | Módulo de autenticação — contém toda a lógica de auth, JWT, strategies.                                                                                                                                   |
+| `PrismaModule`                                         | Módulo global de base de dados — exporta `PrismaService`.                                                                                                                                                   |
 
 O `HealthController` e `HealthService` ficam diretamente no módulo raiz por serem transversais ao serviço.
 
@@ -352,11 +347,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 **O que faz:**
 
 1. **Estende `PrismaClient`** — Isto significa que `PrismaService` **é** um `PrismaClient`. Qualquer código pode fazer `this.prisma.user.create(...)` diretamente.
-
 2. **`PrismaPg` adapter** — Prisma 7 introduziu driver adapters. Em vez de usar o engine binário do Prisma, usa o cliente nativo `pg` do Node.js. Isto reduz o tamanho do bundle e melhora a performance.
-
 3. **`OnModuleInit`** → Liga à BD quando o módulo arranca.
-
 4. **`OnModuleDestroy`** → Desliga da BD quando o módulo é destruído (graceful shutdown).
 
 ### PrismaModule
@@ -414,13 +406,13 @@ TTL:    tempo restante até o JWT expirar
 
 **Porquê Redis e não uma tabela Session no PostgreSQL?**
 
-| Critério | Tabela Session (Postgres) | Blacklist (Redis) |
-|----------|---------------------------|-------------------|
-| **Acessibilidade** | Apenas o auth-service pode aceder à sua BD | Todos os microserviços acedem ao Redis partilhado |
-| **Performance** | Query SQL a cada request autenticado | Lookup in-memory O(1) |
-| **Limpeza automática** | Precisa de cron job para limpar expirados | TTL nativo — Redis apaga automaticamente |
-| **Tamanho** | Cresce com cada login (uma row por sessão) | Apenas tokens invalidados (muito menos) |
-| **Semântica** | Allowlist (verifica se existe) | Blacklist (verifica se foi revogado) |
+| Critério                     | Tabela Session (Postgres)                   | Blacklist (Redis)                                  |
+| ----------------------------- | ------------------------------------------- | -------------------------------------------------- |
+| **Acessibilidade**      | Apenas o auth-service pode aceder à sua BD | Todos os microserviços acedem ao Redis partilhado |
+| **Performance**         | Query SQL a cada request autenticado        | Lookup in-memory O(1)                              |
+| **Limpeza automática** | Precisa de cron job para limpar expirados   | TTL nativo — Redis apaga automaticamente          |
+| **Tamanho**             | Cresce com cada login (uma row por sessão) | Apenas tokens invalidados (muito menos)            |
+| **Semântica**          | Allowlist (verifica se existe)              | Blacklist (verifica se foi revogado)               |
 
 #### `blacklistToken(jti, ttlSeconds)`
 
@@ -467,8 +459,8 @@ async addToStream(stream: string, data: Record<string, any>): Promise<string> {
 
 **Streams usados:**
 
-| Stream | Quando publicado | Payload |
-|--------|------------------|---------|
+| Stream           | Quando publicado                             | Payload                                   |
+| ---------------- | -------------------------------------------- | ----------------------------------------- |
 | `user.created` | Após registo local ou primeiro login Google | `{ id, email, username, authProvider }` |
 
 O `user-service` e outros microserviços consomem este stream para criar registos locais (perfil, wallet, etc.).
@@ -512,15 +504,15 @@ export class AuthModule {}
 
 ### Explicação detalhada
 
-| Elemento | Propósito |
-|----------|-----------|
-| `PassportModule.register({ defaultStrategy: 'jwt' })` | Regista o Passport.js com strategy padrão JWT. Quando um guard não especifica a strategy, usa JWT automaticamente. |
-| `JwtModule.registerAsync(...)` | Registra o módulo JWT **de forma assíncrona** para poder injetar o `ConfigService` e ler as variáveis de ambiente. O `secret` vem de `JWT_SECRET` e a expiração de `JWT_EXPIRATION` (default: 3600 segundos = 1 hora). |
-| `AuthService` | Toda a lógica de negócio de autenticação. |
-| `RedisService` | Cliente Redis para blacklist e streams. |
-| `JwtStrategy` | Strategy Passport que valida tokens JWT + verifica blacklist. |
-| `GoogleStrategy` | Strategy Passport para OAuth 2.0 com Google. |
-| `exports: [AuthService, RedisService]` | Permite que outros módulos usem estes services se necessário. |
+| Elemento                                                | Propósito                                                                                                                                                                                                                               |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PassportModule.register({ defaultStrategy: 'jwt' })` | Regista o Passport.js com strategy padrão JWT. Quando um guard não especifica a strategy, usa JWT automaticamente.                                                                                                                     |
+| `JwtModule.registerAsync(...)`                        | Registra o módulo JWT**de forma assíncrona** para poder injetar o `ConfigService` e ler as variáveis de ambiente. O `secret` vem de `JWT_SECRET` e a expiração de `JWT_EXPIRATION` (default: 3600 segundos = 1 hora). |
+| `AuthService`                                         | Toda a lógica de negócio de autenticação.                                                                                                                                                                                            |
+| `RedisService`                                        | Cliente Redis para blacklist e streams.                                                                                                                                                                                                  |
+| `JwtStrategy`                                         | Strategy Passport que valida tokens JWT + verifica blacklist.                                                                                                                                                                            |
+| `GoogleStrategy`                                      | Strategy Passport para OAuth 2.0 com Google.                                                                                                                                                                                             |
+| `exports: [AuthService, RedisService]`                | Permite que outros módulos usem estes services se necessário.                                                                                                                                                                          |
 
 ### JWT — Configuração
 
@@ -558,10 +550,10 @@ export class RegisterDto {
 }
 ```
 
-| Campo | Validações | Regras |
-|-------|-----------|--------|
-| `email` | `@IsEmail()`, `@IsNotEmpty()` | Deve ser um email válido RFC 5322 |
-| `username` | `@MinLength(3)`, `@MaxLength(30)`, regex | 3-30 caracteres: letras, números e underscore |
+| Campo        | Validações                                      | Regras                                                 |
+| ------------ | ------------------------------------------------- | ------------------------------------------------------ |
+| `email`    | `@IsEmail()`, `@IsNotEmpty()`                 | Deve ser um email válido RFC 5322                     |
+| `username` | `@MinLength(3)`, `@MaxLength(30)`, regex      | 3-30 caracteres: letras, números e underscore         |
 | `password` | Regex `/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/` | Mínimo 8 chars, 1 maiúscula, 1 minúscula, 1 dígito |
 
 **Porquê o `!`?** O `!` é o operador de "definite assignment assertion" do TypeScript. Diz ao compiler que o campo será preenchido (pelo NestJS via body parsing), evitando erros de `strictPropertyInitialization`.
@@ -730,6 +722,7 @@ export class JwtGuard extends AuthGuard('jwt') {}
 Ativa a `JwtStrategy` para a rota decorada. Quando usado com `@UseGuards(JwtGuard)`, o request só prossegue se o token for válido e não estiver blacklisted. Caso contrário, retorna `401 Unauthorized`.
 
 **Rotas que usam este guard:**
+
 - `POST /auth/logout`
 - `GET /auth/me`
 - `POST /auth/2fa/setup`
@@ -742,7 +735,22 @@ Ativa a `JwtStrategy` para a rota decorada. Quando usado com `@UseGuards(JwtGuar
 
 ```typescript
 @Injectable()
-export class GoogleAuthGuard extends AuthGuard('google') {}
+export class GoogleAuthGuard extends AuthGuard('google') {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    // For the callback endpoint, Passport will validate the code
+    // The Fastify-Passport integration should work here since we're just validating,
+    // not doing a redirect
+    return (await super.canActivate(context)) as boolean;
+  }
+
+  handleRequest(err: any, user: any, info: any, context?: ExecutionContext) {
+    if (err || !user) {
+      throw err || new Error('Google authentication failed');
+    }
+    return user;
+  }
+}
+
 ```
 
 Ativa a `GoogleStrategy`. Na rota `GET /auth/google`, redireciona o browser para o consentimento do Google. Na rota `GET /auth/google/callback`, troca o `code` por um access token e obtém o perfil.
@@ -854,13 +862,14 @@ private sanitizeUser(user: { id: string; email: string; username: string; authPr
 ```
 
 **Tratamento de erros:**
+
 - Se o email ou username já existe → Prisma lança erro `P2002` (unique constraint violation) → `409 Conflict`.
 - Qualquer outro erro é re-thrown.
 
-**Porquê `bcrypt.hash(password, 10)`?**  
+**Porquê `bcrypt.hash(password, 10)`?**
 O `10` são os **salt rounds** — o custo computacional do hash. 10 é o padrão recomendado (produz ~10 hashes/segundo num CPU moderno). Aumentar para 12-14 em produção torna brute-force mais lento, mas também aumenta o tempo de resposta do registo/login.
 
-**Porquê publicar `user.created`?**  
+**Porquê publicar `user.created`?**
 O auth-service cria a identidade mínima (email, username, password hash). Outros microserviços (user-service, wallet-service) precisam criar registos complementares (perfil, saldo inicial). O Redis Stream garante que, mesmo que um consumer esteja offline, a mensagem persiste.
 
 ---
@@ -885,13 +894,13 @@ O auth-service cria a identidade mínima (email, username, password hash). Outro
    └→ Retorna { success: true, data: { user, accessToken } }
 ```
 
-**Segurança: mensagem genérica no 401**  
+**Segurança: mensagem genérica no 401**
 A resposta é sempre `"Invalid credentials"` — nunca "email não encontrado" ou "password incorreta". Isto impede que um atacante descubra se um email está registado (user enumeration attack).
 
-**Porquê `findFirst` com `OR`?**  
+**Porquê `findFirst` com `OR`?**
 Permite login tanto com email como com username. O campo chama-se `identifier` no DTO para ser agnóstico.
 
-**Verificação `!user.hashedPassword`**  
+**Verificação `!user.hashedPassword`**
 Se o utilizador se registou via Google, não tem password. Impede login local para contas Google-only.
 
 ---
@@ -910,10 +919,10 @@ Se o utilizador se registou via Google, não tem password. Impede login local pa
 5. O token é agora efetivamente inválido
 ```
 
-**Porquê `jwt.decode()` e não `jwt.verify()`?**  
+**Porquê `jwt.decode()` e não `jwt.verify()`?**
 O logout é **best-effort**. Mesmo que o token seja malformado ou inválido, o logout não deve falhar. O `decode()` apenas extrai o payload sem verificar a assinatura. Se falhar, o catch vazio ignora o erro.
 
-**Porquê TTL?**  
+**Porquê TTL?**
 Não faz sentido manter um token na blacklist eternamente. Assim que o JWT expira naturalmente, a entrada Redis também é eliminada automaticamente — zero desperdício de memória.
 
 ---
@@ -952,7 +961,7 @@ async getMe(userId: string) {
 6. Retorna { secret, qrCodeUrl }
 ```
 
-**O que é o `otpauthUrl`?**  
+**O que é o `otpauthUrl`?**
 URI no formato `otpauth://totp/ft_transcendence:user@email.com?secret=XXX&issuer=ft_transcendence`. O Google Authenticator (e outras apps) interpretam este URI para configurar o código rotativo.
 
 **O `qrCodeUrl`** é a imagem do QR code como data URL (`data:image/png;base64,...`). O frontend pode mostrar diretamente num `<img>` tag sem precisar de fazer download.
@@ -972,7 +981,7 @@ URI no formato `otpauth://totp/ft_transcendence:user@email.com?secret=XXX&issuer
 6. A partir de agora, o login requer código 2FA
 ```
 
-**Porquê validar antes de ativar?**  
+**Porquê validar antes de ativar?**
 Garante que o utilizador configurou o Authenticator corretamente. Se ativássemos sem validar, o utilizador poderia ficar trancado fora da conta (secret errado).
 
 ---
@@ -988,7 +997,7 @@ Garante que o utilizador configurou o Authenticator corretamente. Se ativássemo
 4. Se válido → UPDATE user SET twoFAEnabled = false, twoFASecret = null
 ```
 
-**Porquê pedir o código?**  
+**Porquê pedir o código?**
 Sem validação, qualquer pessoa com acesso a um token roubado poderia desativar o 2FA. Pedir o código prova que o utilizador ainda controla o Authenticator.
 
 ---
@@ -1044,13 +1053,13 @@ Este é o **segundo passo do login com 2FA**. O fluxo completo é:
 
 **Cenários detalhados:**
 
-| Cenário | Google ID existe? | Email existe? | Acção |
-|---------|-------------------|---------------|-------|
-| User Google já registado | ✅ | — | Login normal |
-| User local liga Google | ❌ | ✅ | UPDATE: adiciona googleId |
-| User completamente novo | ❌ | ❌ | CREATE: novo user GOOGLE |
+| Cenário                  | Google ID existe? | Email existe? | Acção                   |
+| ------------------------- | ----------------- | ------------- | ------------------------- |
+| User Google já registado | ✅                | —            | Login normal              |
+| User local liga Google    | ❌                | ✅            | UPDATE: adiciona googleId |
+| User completamente novo   | ❌                | ❌            | CREATE: novo user GOOGLE  |
 
-**Geração de username para OAuth:**  
+**Geração de username para OAuth:**
 O displayName do Google (ex: "João Silva") é sanitizado: caracteres especiais viram `_`, truncado a 25 chars. Se já existir um username igual, adiciona um sufixo baseado em timestamp Base36 (ex: `Joao_Silva_lk3f5`).
 
 ---
@@ -1061,19 +1070,19 @@ O displayName do Google (ex: "João Silva") é sanitizado: caracteres especiais 
 
 ### Sumário de todos os endpoints
 
-| # | Método | Rota | Auth | Rate Limit | Status | Descrição |
-|---|--------|------|------|------------|--------|-----------|
-| 1 | `POST` | `/auth/register` | — | Global (30/min) | `201` | Registo local |
-| 2 | `POST` | `/auth/login` | — | **5/min** | `200` | Login local |
-| 3 | `POST` | `/auth/logout` | JWT | Global | `204` | Blacklist token |
-| 4 | `GET` | `/auth/me` | JWT | Global | `200` | Perfil do user |
-| 5 | `POST` | `/auth/2fa/setup` | JWT | Global | `200` | Gera QR code |
-| 6 | `POST` | `/auth/2fa/verify` | JWT | Global | `200` | Activa 2FA |
-| 7 | `POST` | `/auth/2fa/disable` | JWT | Global | `200` | Desactiva 2FA |
-| 8 | `POST` | `/auth/2fa/validate` | — | Global | `200` | Completa login 2FA |
-| 9 | `GET` | `/auth/google` | — | — | `302` | Redirect Google |
-| 10 | `GET` | `/auth/google/callback` | — | — | `302` | Callback Google |
-| 11 | `GET` | `/health` | — | — | `200` | Health check |
+| #  | Método  | Rota                      | Auth | Rate Limit      | Status  | Descrição        |
+| -- | -------- | ------------------------- | ---- | --------------- | ------- | ------------------ |
+| 1  | `POST` | `/auth/register`        | —   | Global (30/min) | `201` | Registo local      |
+| 2  | `POST` | `/auth/login`           | —   | **5/min** | `200` | Login local        |
+| 3  | `POST` | `/auth/logout`          | JWT  | Global          | `204` | Blacklist token    |
+| 4  | `GET`  | `/auth/me`              | JWT  | Global          | `200` | Perfil do user     |
+| 5  | `POST` | `/auth/2fa/setup`       | JWT  | Global          | `200` | Gera QR code       |
+| 6  | `POST` | `/auth/2fa/verify`      | JWT  | Global          | `200` | Activa 2FA         |
+| 7  | `POST` | `/auth/2fa/disable`     | JWT  | Global          | `200` | Desactiva 2FA      |
+| 8  | `POST` | `/auth/2fa/validate`    | —   | Global          | `200` | Completa login 2FA |
+| 9  | `GET`  | `/auth/google`          | —   | —              | `302` | Redirect Google    |
+| 10 | `GET`  | `/auth/google/callback` | —   | —              | `302` | Callback Google    |
+| 11 | `GET`  | `/health`               | —   | —              | `200` | Health check       |
 
 ### Detalhes de cada endpoint
 
@@ -1316,26 +1325,27 @@ GET /auth/me
 
 ## 18 — Variáveis de Ambiente
 
-| Variável | Default | Obrigatória | Descrição |
-|----------|---------|-------------|-----------|
-| `PORT` | `3001` | Não | Porta do HTTP server |
-| `NODE_ENV` | — | Não | `development` / `production` |
-| `DB_HOST` | — | Sim | Hostname do PostgreSQL (`authDb` em Docker) |
-| `DB_PORT` | — | Sim | Porta do PostgreSQL (`5432`) |
-| `DB_NAME` | — | Sim | Nome da base de dados (`auth`) |
-| `DB_USER` | — | Sim | Utilizador PostgreSQL (`auth_user`) |
-| `DB_PASSWORD` | — | Sim | Password PostgreSQL |
-| `JWT_SECRET` | `'default_pass'` | Sim | Secret para assinar JWTs (mín 32 chars em prod) |
-| `JWT_EXPIRATION` | `3600` | Não | Expiração do JWT em segundos (1h default) |
-| `REDIS_HOST` | `'localhost'` | Sim | Hostname Redis (`redis` em Docker) |
-| `REDIS_PORT` | `6379` | Não | Porta Redis |
-| `REDIS_PASSWORD` | — | Sim | Password Redis |
-| `GOOGLE_CLIENT_ID` | `''` | Para OAuth | Client ID do Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | `''` | Para OAuth | Client Secret do Google Cloud Console |
-| `GOOGLE_CALLBACK_URL` | `''` | Para OAuth | URL de callback (ex: `http://localhost:3001/auth/google/callback`) |
-| `FRONTEND_URL` | `'http://localhost:3000'` | Não | URL do frontend (para redirect após Google OAuth) |
+| Variável                | Default                     | Obrigatória | Descrição                                                         |
+| ------------------------ | --------------------------- | ------------ | ------------------------------------------------------------------- |
+| `PORT`                 | `3001`                    | Não         | Porta do HTTP server                                                |
+| `NODE_ENV`             | —                          | Não         | `development` / `production`                                    |
+| `DB_HOST`              | —                          | Sim          | Hostname do PostgreSQL (`authDb` em Docker)                       |
+| `DB_PORT`              | —                          | Sim          | Porta do PostgreSQL (`5432`)                                      |
+| `DB_NAME`              | —                          | Sim          | Nome da base de dados (`auth`)                                    |
+| `DB_USER`              | —                          | Sim          | Utilizador PostgreSQL (`auth_user`)                               |
+| `DB_PASSWORD`          | —                          | Sim          | Password PostgreSQL                                                 |
+| `JWT_SECRET`           | `'default_pass'`          | Sim          | Secret para assinar JWTs (mín 32 chars em prod)                    |
+| `JWT_EXPIRATION`       | `3600`                    | Não         | Expiração do JWT em segundos (1h default)                         |
+| `REDIS_HOST`           | `'localhost'`             | Sim          | Hostname Redis (`redis` em Docker)                                |
+| `REDIS_PORT`           | `6379`                    | Não         | Porta Redis                                                         |
+| `REDIS_PASSWORD`       | —                          | Sim          | Password Redis                                                      |
+| `GOOGLE_CLIENT_ID`     | `''`                      | Para OAuth   | Client ID do Google Cloud Console                                   |
+| `GOOGLE_CLIENT_SECRET` | `''`                      | Para OAuth   | Client Secret do Google Cloud Console                               |
+| `GOOGLE_CALLBACK_URL`  | `''`                      | Para OAuth   | URL de callback (ex:`http://localhost:3001/auth/google/callback`) |
+| `FRONTEND_URL`         | `'http://localhost:3000'` | Não         | URL do frontend (para redirect após Google OAuth)                  |
 
 As variáveis `DB_*` são combinadas no `entrypoint.dev.sh` para formar a `DATABASE_URL`:
+
 ```
 postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public
 ```
@@ -1346,43 +1356,43 @@ postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=p
 
 ### Dependências de Produção
 
-| Pacote | Versão | Propósito |
-|--------|--------|-----------|
-| `@nestjs/common` | 11.x | Decorators, pipes, guards, exceptions |
-| `@nestjs/core` | 11.x | Kernel do NestJS (DI, módulos, lifecycle) |
-| `@nestjs/platform-fastify` | 11.x | Adapter Fastify para NestJS |
-| `@nestjs/jwt` | 11.x | Módulo para gerar/validar JWT |
-| `@nestjs/passport` | 11.x | Integração Passport.js ↔ NestJS |
-| `@nestjs/config` | 4.x | ConfigModule para env vars tipadas |
-| `@nestjs/throttler` | 6.x | Rate limiting nativo |
-| `@nestjs/swagger` | 11.x | Documentação OpenAPI automática |
-| `@prisma/client` | 7.x | ORM TypeScript para PostgreSQL |
-| `@prisma/adapter-pg` | 7.x | Driver adapter nativo pg |
-| `passport` | 0.7.x | Biblioteca base de autenticação |
-| `passport-jwt` | 4.x | Strategy para validar JWT |
-| `passport-google-oauth20` | 2.x | Strategy para OAuth Google |
-| `bcrypt` | 6.x | Hashing de passwords (bcrypt algorithm) |
-| `ioredis` | 5.x | Cliente Redis para Node.js |
-| `otplib` | 13.x | TOTP: geração e verificação (2FA) |
-| `qrcode` | 1.x | Geração de QR codes para 2FA |
-| `class-validator` | 0.14.x | Decorators de validação para DTOs |
-| `class-transformer` | 0.5.x | Serialização/deserialização de classes |
-| `rxjs` | 7.x | Reactive programming (dependência NestJS) |
+| Pacote                       | Versão | Propósito                                 |
+| ---------------------------- | ------- | ------------------------------------------ |
+| `@nestjs/common`           | 11.x    | Decorators, pipes, guards, exceptions      |
+| `@nestjs/core`             | 11.x    | Kernel do NestJS (DI, módulos, lifecycle) |
+| `@nestjs/platform-fastify` | 11.x    | Adapter Fastify para NestJS                |
+| `@nestjs/jwt`              | 11.x    | Módulo para gerar/validar JWT             |
+| `@nestjs/passport`         | 11.x    | Integração Passport.js ↔ NestJS         |
+| `@nestjs/config`           | 4.x     | ConfigModule para env vars tipadas         |
+| `@nestjs/throttler`        | 6.x     | Rate limiting nativo                       |
+| `@nestjs/swagger`          | 11.x    | Documentação OpenAPI automática         |
+| `@prisma/client`           | 7.x     | ORM TypeScript para PostgreSQL             |
+| `@prisma/adapter-pg`       | 7.x     | Driver adapter nativo pg                   |
+| `passport`                 | 0.7.x   | Biblioteca base de autenticação          |
+| `passport-jwt`             | 4.x     | Strategy para validar JWT                  |
+| `passport-google-oauth20`  | 2.x     | Strategy para OAuth Google                 |
+| `bcrypt`                   | 6.x     | Hashing de passwords (bcrypt algorithm)    |
+| `ioredis`                  | 5.x     | Cliente Redis para Node.js                 |
+| `otplib`                   | 13.x    | TOTP: geração e verificação (2FA)      |
+| `qrcode`                   | 1.x     | Geração de QR codes para 2FA             |
+| `class-validator`          | 0.14.x  | Decorators de validação para DTOs        |
+| `class-transformer`        | 0.5.x   | Serialização/deserialização de classes |
+| `rxjs`                     | 7.x     | Reactive programming (dependência NestJS) |
 
 ### Dependências de Desenvolvimento
 
-| Pacote | Propósito |
-|--------|-----------|
-| `@types/bcrypt` | Tipagens TypeScript para bcrypt |
-| `@types/passport-jwt` | Tipagens para passport-jwt |
-| `@types/passport-google-oauth20` | Tipagens para Google OAuth |
-| `@types/qrcode` | Tipagens para qrcode |
-| `prisma` | CLI do Prisma (migrations, generate) |
-| `jest` | Framework de testes |
-| `ts-jest` | Transpilador TypeScript para Jest |
-| `supertest` | HTTP assertions para testes e2e |
-| `typescript` | Compiler TypeScript |
-| `eslint` + `prettier` | Linting e formatação |
+| Pacote                             | Propósito                           |
+| ---------------------------------- | ------------------------------------ |
+| `@types/bcrypt`                  | Tipagens TypeScript para bcrypt      |
+| `@types/passport-jwt`            | Tipagens para passport-jwt           |
+| `@types/passport-google-oauth20` | Tipagens para Google OAuth           |
+| `@types/qrcode`                  | Tipagens para qrcode                 |
+| `prisma`                         | CLI do Prisma (migrations, generate) |
+| `jest`                           | Framework de testes                  |
+| `ts-jest`                        | Transpilador TypeScript para Jest    |
+| `supertest`                      | HTTP assertions para testes e2e      |
+| `typescript`                     | Compiler TypeScript                  |
+| `eslint` + `prettier`          | Linting e formatação               |
 
 ---
 
@@ -1393,11 +1403,13 @@ postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=p
 **Problema:** JWTs são stateless — uma vez emitidos, são válidos até expirar. Para implementar "logout real", é preciso manter estado em algum lado.
 
 **Opção rejeitada (tabela Session no PostgreSQL):**
+
 - Cada login cria uma row, cada request autenticado faz uma query SQL.
 - A tabela está no BD do auth-service — outros microserviços não a conseguem consultar.
 - Precisa de cron job para limpar sessões expiradas.
 
 **Opção escolhida (blacklist no Redis):**
+
 - Apenas tokens **revogados** são armazenados (muito menos que o total de sessões).
 - Redis é partilhado por todos os microserviços na rede `devnet`.
 - TTL nativo — limpeza automática quando o JWT expiraria naturalmente.
@@ -1420,6 +1432,7 @@ postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=p
 **Problema:** Durante o login com 2FA, o servidor precisa saber **quem** está a tentar completar o 2FA sem ter emitido um token de acesso completo.
 
 **Decisão:** Gera um JWT temporário com:
+
 - `isTwoFA: true` → flag que a `JwtStrategy` rejeita (não é um token de acesso)
 - `expiresIn: '5m'` → expira em 5 minutos
 - `sub: userId` → identifica o utilizador
@@ -1429,6 +1442,7 @@ Isto evita manter estado no servidor (não precisa de sessão temporária na BD 
 ### 5. Fastify em vez de Express
 
 O NestJS suporta ambos. Fastify foi escolhido por:
+
 - Performance superior (~2x em benchmarks de requests/segundo)
 - Schema-based validation nativo
 - Melhor suporte TypeScript
