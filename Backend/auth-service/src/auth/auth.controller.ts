@@ -16,6 +16,7 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -29,7 +30,10 @@ import { CurrentUser } from './decorators/current-user.decorator';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
   // ── Register ───────────────────────────────────────────
 
@@ -142,10 +146,30 @@ export class AuthController {
   // ── Google OAuth ───────────────────────────────────────
 
   @Get('google')
-  @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Initiate Google OAuth login (redirects to Google)' })
-  async googleLogin() {
-    // Passport handles the redirect to Google
+  async googleLogin(@Res() reply) {
+    const clientID = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const callbackURL = this.configService.get<string>('GOOGLE_CALLBACK_URL');
+
+    if (!clientID || !callbackURL) {
+      return reply.status(403).send({
+        statusCode: 403,
+        message: 'Google OAuth not configured',
+      });
+    }
+
+    // Build Google OAuth URL
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.append('client_id', clientID);
+    authUrl.searchParams.append('redirect_uri', callbackURL);
+    authUrl.searchParams.append('response_type', 'code');
+    authUrl.searchParams.append('scope', 'email profile');
+    authUrl.searchParams.append('access_type', 'offline');
+
+    console.log('🔐 Google OAuth URL:', authUrl.toString());
+    console.log('📍 Callback URL:', callbackURL);
+
+    return reply.code(307).redirect(authUrl.toString());
   }
 
   @Get('google/callback')
