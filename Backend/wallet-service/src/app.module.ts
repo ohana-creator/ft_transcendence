@@ -1,11 +1,20 @@
 import { Module } from '@nestjs/common';
-import { HealthController } from './health.controller';
-import { HealthService } from './health.service';
-import { PrismaModule } from './database/prisma.module';
-import { RedisModule } from './redis/redis.module';
+import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { HealthController } from './health.controller.js';
+import { HealthService } from './health.service.js';
+import { PrismaModule } from './database/prisma.module.js';
+import { RedisModule } from './redis/redis.module.js';
+import { WalletModule } from './wallet/wallet.module.js';
 
 @Module({
-  imports: [PrismaModule, RedisModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    PrismaModule,
+    RedisModule,
+    WalletModule,
+  ],
   controllers: [HealthController],
   providers: [HealthService],
 })
