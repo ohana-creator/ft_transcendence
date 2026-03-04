@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { WalletService } from './wallet.service.js';
 import { TransferDto } from './dto/transfer.dto.js';
+import { DepositDto } from './dto/deposit.dto.js';
 import { TransactionsQueryDto } from './dto/transactions-query.dto.js';
 
 @ApiTags('Wallet')
@@ -35,6 +36,16 @@ export class WalletController {
     @Body() dto: TransferDto,)
     {
         return this.walletService.transfer(user.userId, dto);
+    }
+
+    @Post('deposit')
+    @HttpCode(201)
+    @ApiOperation({ summary: 'Deposit VAKS into wallet' })
+    async deposit(
+      @CurrentUser() user: { userId: string },
+      @Body() dto: DepositDto,)
+    {
+        return this.walletService.deposit(user.userId, dto);
     }
 
     @Get('transactions')
