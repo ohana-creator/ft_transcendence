@@ -46,7 +46,7 @@ export class WalletController {
     return this.walletService.getTransactions(user.userId, query);
     }
 
-     @Get('transaction:id')
+     @Get('transactions/:id')
     @ApiOperation({ summary: 'Get transaction details by ID' })
     async getTransaction(
       @CurrentUser() user: { userId: string },

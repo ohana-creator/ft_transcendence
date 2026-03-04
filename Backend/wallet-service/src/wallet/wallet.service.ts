@@ -9,14 +9,18 @@ import { UnauthorizedException,
 import { TransferDto } from "./dto/transfer.dto";
 import { TransactionsQueryDto } from "./dto/transactions-query.dto";
 
+const STREAM = 'wallet-events';
+
 @Injectable()
 export class WalletService
 {
     private readonly logger = new Logger(WalletService.name);
 
-    constructor(private readonly conn: PrismaService)
-    {
-    }
+    constructor(
+        private readonly conn: PrismaService,
+        private readonly redis: RedisService,
+    )
+    {}
 
     async createWallet(userId: string, initialBalance: number = 0)
     {
@@ -108,6 +112,14 @@ export class WalletService
         }, {
             isolationLevel: 'Serializable',
             timeout: 10000,
+        });
+
+        // Publish event for Notification Service
+        await this.redis.publish(STREAM, 'wallet.transfer', {
+            transactionId: result.transaction.id,
+            fromUserId,
+            toUserId,
+            amount,
         });
 
         return result;

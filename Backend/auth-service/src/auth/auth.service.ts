@@ -82,7 +82,7 @@ export class AuthService {
       const { token } = this.generateToken(user);
 
       // Publish event for other microservices via Redis Stream
-      await this.redis.addToStream('user.created', {
+      await this.redis.publish('auth-events', 'user.created', {
         id: user.id,
         email: user.email,
         username: user.username,
@@ -387,7 +387,7 @@ export class AuthService {
     }
 
     if (isNewUser) {
-      await this.redis.addToStream('user.created', {
+      await this.redis.publish('auth-events', 'user.created', {
         id: user.id,
         email: user.email,
         username: user.username,

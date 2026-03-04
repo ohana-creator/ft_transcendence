@@ -7,6 +7,7 @@ import { PrismaModule } from './database/prisma.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { WalletModule } from './wallet/wallet.module.js';
+import { EventsModule } from './events/events.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { WalletModule } from './wallet/wallet.module.js';
     RedisModule,
     AuthModule,
     WalletModule,
+    EventsModule,
   ],
   controllers: [HealthController],
   providers: [HealthService],
