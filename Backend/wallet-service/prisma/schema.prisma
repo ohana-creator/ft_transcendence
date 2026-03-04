@@ -47,7 +47,7 @@ enum TransactionType {
   P2P_TRANSFER
   CAMPAIGN_CONTRIBUTION
   CAMPAIGN_WITHDRAWAL
-  INITIAL_DEPOSIT
+  DEPOSIT
 }
 
 enum TransactionStatus {
