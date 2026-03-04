@@ -64,4 +64,9 @@ export class RedisService implements OnModuleDestroy
     {
         return (this.client);
     }
+
+    async isTokenBlacklisted(jti: string): Promise<boolean> {
+    const result = await this.client.get(`blacklist:${jti}`);
+    return result !== null;
+  }
 }
