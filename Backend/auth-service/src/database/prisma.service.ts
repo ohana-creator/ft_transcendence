@@ -9,8 +9,6 @@ implements OnModuleInit, OnModuleDestroy
 {
     constructor()
     {
-        console.log('im on prisma.service.ts contructor, and imma show the database_url env');
-        console.log(`${process.env.DATABASE_URL}`);
         const pool = new PrismaPg({connectionString: process.env.DATABASE_URL});
         super({ adapter: pool });
     }

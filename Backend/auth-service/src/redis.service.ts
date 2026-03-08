@@ -33,17 +33,19 @@ export class RedisService implements OnModuleDestroy {
     return result !== null;
   }
 
-  // ── Streams ──────────────────────────────────────────────
+  // ── Event Publishing ──────────────────────────────────────
 
-  async addToStream(stream: string, data: Record<string, any>): Promise<string> {
+  async publish(stream: string, event: string, data: Record<string, any>): Promise<string> {
     const id = await this.client.xadd(
       stream,
       '*',
+      'event',
+      event,
       'payload',
       JSON.stringify(data),
     );
-    if (!id) throw new Error(`Failed to add to stream ${stream}`);
-    this.logger.log(`Added to stream ${stream} (id: ${id})`);
+    if (!id) throw new Error(`Failed to publish ${event} to ${stream}`);
+    this.logger.log(`Published ${event} to ${stream} (id: ${id})`);
     return id;
   }
 }

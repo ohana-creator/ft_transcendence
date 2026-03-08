@@ -269,9 +269,11 @@ services:
     volumes:
       - ./Backend/user-service/src:/app/src
       - ./Backend/user-service/test:/app/test
+      - ./Backend/user-service/prisma:/app/prisma
       - ./Backend/user-service/tsconfig.json:/app/tsconfig.json
       - ./Backend/user-service/tsconfig.build.json:/app/tsconfig.build.json
       - ./Backend/user-service/nest-cli.json:/app/nest-cli.json
+      - ./Backend/user-service/prisma.config.ts:/app/prisma.config.ts
     networks:
       - devnet
     depends_on:
@@ -319,15 +321,18 @@ services:
       DB_NAME: wallet
       DB_USER: wallet_user
       DB_PASSWORD: change_me
+      JWT_SECRET: change_me
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
     volumes:
       - ./Backend/wallet-service/src:/app/src
       - ./Backend/wallet-service/test:/app/test
+      - ./Backend/wallet-service/prisma:/app/prisma
       - ./Backend/wallet-service/tsconfig.json:/app/tsconfig.json
       - ./Backend/wallet-service/tsconfig.build.json:/app/tsconfig.build.json
       - ./Backend/wallet-service/nest-cli.json:/app/nest-cli.json
+      - ./Backend/wallet-service/prisma.config.ts:/app/prisma.config.ts
     networks:
       - devnet
     depends_on:
