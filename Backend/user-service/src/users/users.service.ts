@@ -17,7 +17,10 @@ export class UsersService {
       select: { id: true, username: true, avatarUrl: true, bio: true, createdAt: true },
     });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    return {
+      ...user,
+      avatarUrl: user.avatarUrl || '/uploads/avatars/default.jpg',
+    };
   }
 
   async update(id: number, dto: UpdateUserDto) {
@@ -56,7 +59,7 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return { users, meta: { total, page, limit, pages: Math.ceil(total / limit) } };
+    return { users: users.map(u => ({ ...u, avatarUrl: u.avatarUrl || '/uploads/avatars/default.jpg' })), meta: { total, page, limit, pages: Math.ceil(total / limit) } };
   }
 
   async updateAvatar(id: number, avatarUrl: string) {
