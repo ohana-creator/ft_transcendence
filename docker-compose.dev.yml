@@ -341,6 +341,67 @@ services:
       redis:
         condition: service_healthy
 
+# ═══════════════════════════════════════════════════════════
+  #  LEDGER SERVICE
+  # ═══════════════════════════════════════════════════════════
+  ledgerDb:
+    image: postgres:16
+    container_name: ledgerDb-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ledger
+      POSTGRES_USER: ledger_user
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5437:5432"
+    volumes:
+      - ledger_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger_user -d ledger"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - devnet
+
+  ledger-service:
+    build:
+      context: ./Backend/ledger-service
+      dockerfile: Dockerfile.dev
+    container_name: ledger-service-dev
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    environment:
+      NODE_ENV: development
+      PORT: 3006
+      DB_HOST: ledgerDb
+      DB_PORT: 5432
+      DB_NAME: ledger
+      DB_USER: ledger_user
+      DB_PASSWORD: change_me
+      JWT_SECRET: change_me
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: change_me
+      AVALANCHE_RPC_URL: https://api.avax-test.network/ext/bc/C/rpc
+      VAKS_CONTRACT_ADDRESS: ${VAKS_CONTRACT_ADDRESS:-}
+      ADMIN_PRIVATE_KEY: ${ADMIN_PRIVATE_KEY:-}
+    volumes:
+      - ./Backend/ledger-service/src:/app/src
+      - ./Backend/ledger-service/prisma:/app/prisma
+      - ./Backend/ledger-service/tsconfig.json:/app/tsconfig.json
+      - ./Backend/ledger-service/tsconfig.build.json:/app/tsconfig.build.json
+      - ./Backend/ledger-service/nest-cli.json:/app/nest-cli.json
+    networks:
+      - devnet
+    depends_on:
+      ledgerDb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
   # ═══════════════════════════════════════════════════════════
   #  REDIS
   # ═══════════════════════════════════════════════════════════
@@ -365,6 +426,7 @@ volumes:
   notification_data_dev:
   user_data_dev:
   wallet_data_dev:
+  ledger_data_dev:
 
 networks:
   devnet:

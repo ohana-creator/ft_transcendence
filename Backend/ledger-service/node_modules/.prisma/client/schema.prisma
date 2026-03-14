@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model LedgerEntry {
+  id          String          @id @default(uuid())
+  userId      String
+  walletAddr  String
+  txHash      String?         @unique
+  amount      Float
+  operation   LedgerOperation
+  ref         String?
+  blockNumber Int?
+  status      LedgerStatus    @default(PENDING)
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+
+  @@index([userId])
+  @@index([walletAddr])
+  @@index([operation])
+  @@index([createdAt])
+}
+
+model WalletMapping {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  walletAddr String   @unique
+  createdAt  DateTime @default(now())
+}
+
+enum LedgerOperation {
+  MINT
+  TRANSFER
+  BURN
+}
+
+enum LedgerStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
