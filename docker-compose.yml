@@ -22,6 +22,7 @@ services:
       NOTIFICATION_SERVICE_URL: http://notification-service:${NOTIFICATION_SERVICE_PORT}
       USER_SERVICE_URL: http://user-service:${USER_SERVICE_PORT}
       WALLET_SERVICE_URL: http://wallet-service:${WALLET_SERVICE_PORT}
+      LEDGER_SERVICE_URL: http://ledger-service:${LEDGER_SERVICE_PORT}
     networks:
       - TransNetwork
     depends_on:
@@ -257,6 +258,57 @@ services:
       walletDb:
         condition: service_healthy
 
+  ledgerDb:
+    image: postgres:16
+    container_name: ledgerDb
+    restart: unless-stopped
+    secrets:
+      - ledger_db_password
+    environment:
+      POSTGRES_DB: ${LEDGER_DB_NAME}
+      POSTGRES_USER: ${LEDGER_DB_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/ledger_db_password
+    volumes:
+      - ledger_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LEDGER_DB_USER} -d ${LEDGER_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ledgernet
+
+  ledger-service:
+    build: ./Backend/ledger-service
+    image: ledger-service
+    container_name: ledger-service
+    restart: unless-stopped
+    secrets:
+      - ledger_db_password
+      - redis_password
+      - jwt_secret
+      - admin_private_key
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${LEDGER_SERVICE_PORT}
+      DB_HOST: ${LEDGER_DB_HOST}
+      DB_PORT: ${LEDGER_DB_PORT}
+      DB_NAME: ${LEDGER_DB_NAME}
+      DB_USER: ${LEDGER_DB_USER}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      AVALANCHE_RPC_URL: ${AVALANCHE_RPC_URL}
+      VAKS_CONTRACT_ADDRESS: ${VAKS_CONTRACT_ADDRESS}
+      ADMIN_PRIVATE_KEY_FILE: /run/secrets/admin_private_key
+    networks:
+      - TransNetwork
+      - ledgernet
+    depends_on:
+      ledgerDb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -278,6 +330,7 @@ volumes:
   notification_data:
   user_data:
   wallet_data:
+  ledger_data:
 
 secrets:
   auth_db_password:
@@ -298,6 +351,10 @@ secrets:
     file: ./secrets/user_db_password.txt
   wallet_db_password:
     file: ./secrets/wallet_db_password.txt
+  ledger_db_password:
+    file: ./secrets/ledger_db_password.txt
+  admin_private_key:
+    file: ./secrets/admin_private_key.txt
 
 networks:
   TransNetwork:
@@ -311,4 +368,6 @@ networks:
   usernet:
     driver: bridge
   walletnet:
+    driver: bridge
+  ledgernet:
     driver: bridge
