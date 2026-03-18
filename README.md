@@ -11,9 +11,6 @@ vaks-platform/
 ├── apps/
 │   ├── frontend/          # Aplicação web (React / Next.js)
 │   └── backend/           # Microserviços NestJS
-│       ├── ledger-service/        # Gestão de tokens on-chain
-│       ├── ledger-contracts/      # Smart contract ERC-20 (Hardhat)
-│       └── wallet-service/        # Gestão de carteiras e depósitos
 ├── docs/                  # Documentação técnica e de produto
 └── README.md
 ```
@@ -162,4 +159,4 @@ git subtree pull --prefix=apps/backend backend-origin main --squash
 
 ## Licença
 
-Projecto académico — Trabalho Final de Curso.
+Projecto académico — Projecto Final Common Core.
