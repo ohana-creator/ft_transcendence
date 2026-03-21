@@ -5,7 +5,7 @@
 "use client";
 
 import { useI18n } from "@/locales/useI18n";
-import { Link } from "lucide-react";
+import Link from "next/link";
 
 export default function PrivacyPolicyPage() {
   const { t } = useI18n();
@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
         {/* Meta */}
         <div className="inline-flex items-center gap-2 text-xs text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt bg-vaks-light-card dark:bg-vaks-dark-purple-card border border-vaks-light-stroke dark:border-vaks-dark-stroke rounded-lg px-3.5 py-2 mb-8">
           <span className="w-1.75 h-1.75 bg-[#7C3AED] rounded-full shrink-0" />
-          {t.legal.ultima_atualizacao}: Janeiro de 2025 · {t.legal.versao} 1.0 · VAKS Platform
+          {t.legal.ultima_atualizacao}: Março de 2026 · {t.legal.versao} 1.0 · VAKS Platform
         </div>
 
         {/* TOC */}

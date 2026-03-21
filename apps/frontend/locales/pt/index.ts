@@ -63,7 +63,7 @@ export const pt = {
       secoes: [
         {
           titulo: 'Quem somos',
-          conteudo: 'A VAKS é uma plataforma digital de crowdfunding colaborativo — vaquinhas públicas e privadas — desenvolvida como projeto final académico na escola 42. Permite criar campanhas de angariação de fundos para objetivos pessoais, associativos ou comunitários.\n\nO responsável pelo tratamento dos dados é a equipa de desenvolvimento VAKS, sediada na escola 42 Lisboa.\n\nEsta plataforma foi desenvolvida com fins académicos na escola 42. Os dados recolhidos destinam-se exclusivamente ao funcionamento do serviço e avaliação do projeto.'
+          conteudo: 'A VAKS é uma plataforma digital de crowdfunding colaborativo — vaquinhas públicas e privadas — desenvolvida como projeto final académico na escola 42. Permite criar campanhas de angariação de fundos para objetivos pessoais, associativos ou comunitários.\n\nO responsável pelo tratamento dos dados é a equipa de desenvolvimento VAKS, sediada na escola 42 Luanda, Angola.\n\nEsta plataforma foi desenvolvida com fins académicos na escola 42 Luanda. Os dados recolhidos destinam-se exclusivamente ao funcionamento do serviço e avaliação do projeto.'
         },
         {
           titulo: 'Dados que recolhemos',
@@ -121,7 +121,7 @@ export const pt = {
             'Controlo de acessos restrito;',
             'Revisões de segurança periódicas.'
           ],
-          rodape: 'Em caso de violação, notificaremos os utilizadores e a CNPD em 72 horas.'
+          rodape: 'Em caso de violação, notificaremos os utilizadores de acordo com a legislação angolana de proteção de dados dentro de 72 horas.'
         },
         {
           titulo: 'Retenção de dados',
@@ -134,7 +134,7 @@ export const pt = {
         },
         {
           titulo: 'Os seus direitos',
-          conteudo: 'Tem os seguintes direitos ao abrigo do RGPD:',
+          conteudo: 'Tem os seguintes direitos de proteção de dados:',
           itens: [
             'Acesso, Retificação e Apagamento;',
             'Limitação e Portabilidade;',
@@ -157,9 +157,9 @@ export const pt = {
         {
           titulo: 'Contacto',
           itens: [
-            'E-mail: privacidade@vaks.pt',
+            'E-mail: privacidade@vaks.ao',
             'Suporte: formulário na secção "Ajuda"',
-            'Morada: Escola 42 Lisboa, Portugal'
+            'Morada: Escola 42 Luanda, Angola'
           ]
         }
       ]
@@ -198,7 +198,7 @@ export const pt = {
         {
           titulo: 'Contribuições',
           itens: [
-            'Processadas por entidades externas (Stripe, MB Way).',
+            'Processadas por entidades externas (Stripe, Multicaixa Express).',
             'Contribuições são definitivas e reembolsos via criador.',
             'Podem aplicar-se taxas de serviço.'
           ]
@@ -231,7 +231,7 @@ export const pt = {
         },
         {
           titulo: 'Lei aplicável',
-          conteudo: 'Regido pela lei portuguesa. Litígios resolvidos no tribunal de Lisboa ou via plataforma RAL da UE.'
+          conteudo: 'Regido pela legislação de Angola. Litígios resolvidos de acordo com as leis angolanas e mediação arbitral conforme necessário.'
         }
       ]
     },

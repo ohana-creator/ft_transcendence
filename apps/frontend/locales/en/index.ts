@@ -57,7 +57,7 @@ export const en = {
       secoes: [
         {
           titulo: 'Who we are',
-          conteudo: 'VAKS is a digital platform for collaborative crowdfunding — public and private pools — developed as a final academic project at school 42. It allows creating fundraising campaigns for personal, associative or community goals.\n\nThe data controller is the VAKS development team, based at school 42 Lisbon.\n\nThis platform was developed for academic purposes. The data collected is intended exclusively for the operation of the service and evaluation of the project.'
+          conteudo: 'VAKS is a digital platform for collaborative crowdfunding — public and private pools — developed as a final academic project at school 42. It allows creating fundraising campaigns for personal, associative or community goals.\n\nThe data controller is the VAKS development team, based at school 42 Luanda, Angola.\n\nThis platform was developed for academic purposes. The data collected is intended exclusively for the operation of the service and evaluation of the project.'
         },
         {
           titulo: 'Data we collect',
@@ -115,7 +115,7 @@ export const en = {
             'Restricted access control;',
             'Periodic security reviews.'
           ],
-          rodape: 'In case of breach, we will notify users and CNPD within 72 hours.'
+          rodape: 'In case of breach, we will notify users in accordance with Angolan data protection laws within 72 hours.'
         },
         {
           titulo: 'Data retention',
@@ -128,7 +128,7 @@ export const en = {
         },
         {
           titulo: 'Your rights',
-          conteudo: 'You have the following rights under the GDPR:',
+          conteudo: 'You have the following data protection rights:',
           itens: [
             'Access, Rectification and Erasure;',
             'Limitation and Portability;',
@@ -151,9 +151,9 @@ export const en = {
         {
           titulo: 'Contact',
           itens: [
-            'Email: privacy@vaks.pt',
+            'Email: privacy@vaks.ao',
             'Support: form in the "Help" section',
-            'Address: School 42 Lisbon, Portugal'
+            'Address: School 42 Luanda, Angola'
           ]
         }
       ]
@@ -192,7 +192,7 @@ export const en = {
         {
           titulo: 'Contributions',
           itens: [
-            'Processed by external entities (Stripe, MB Way).',
+            'Processed by external entities (Stripe, Multicaixa Express).',
             'Contributions are final and refunds via creator.',
             'Service fees may apply.'
           ]
@@ -225,7 +225,7 @@ export const en = {
         },
         {
           titulo: 'Applicable law',
-          conteudo: 'Governed by Portuguese law. Disputes resolved in the Lisbon court or via the EU ODR platform.'
+          conteudo: 'Governed by the laws of Angola. Disputes are resolved in accordance with Angolan law and arbitration mediation as needed.'
         }
       ]
     },

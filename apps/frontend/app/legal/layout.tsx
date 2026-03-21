@@ -8,12 +8,14 @@ import { useState } from "react";
 import { useI18n } from "@/locales/useI18n";
 import { ThemeModal } from "@/components/MudarTemaModal";
 import { LanguageModal } from "@/components/MudarIdiomaModal";
+import { useRouter } from "next/navigation";
 
 export default function LegalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const { theme } = useTheme();
   const { t, locale } = useI18n();
   const [isThemeOpen, setIsThemeOpen] = useState(false);
@@ -89,13 +91,14 @@ export default function LegalLayout({
 
       {/* Back to home */}
       <div className="max-w-205 mx-auto px-6 pb-10">
-        <Link
-          href="/"
+        <button
+          type="button"
+          onClick={() => router.back()}
           className="inline-flex items-center gap-2 text-sm text-[#7C3AED] dark:text-vaks-dark-alt-txt hover:underline font-medium"
         >
           <ArrowLeft className="w-4 h-4" />
           {t.legal.navbar.voltar}
-        </Link>
+        </button>
       </div>
     </div>
   );
