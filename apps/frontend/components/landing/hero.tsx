@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { useI18n } from "@/locales";
 import { AnimatedLogo } from "@/components/ui/AnimatedLogo";
@@ -11,7 +10,7 @@ export default function HeroSection() {
   const landing = t.landing;
 
   return (
-    <section className="relative w-full overflow-hidden pb-10 pt-32 font-light antialiased md:pb-16 md:pt-20 bg-vaks-light-primary dark:bg-vaks-dark-primary">
+    <section className="relative w-full overflow-hidden pb-10 pt-10 font-light antialiased md:pb-16 md:pt-12 bg-vaks-light-primary dark:bg-vaks-dark-primary">
       {/* Radial glow decorations */}
       <div
         className="absolute right-0 top-0 h-1/2 w-1/2"
@@ -35,7 +34,7 @@ export default function HeroSection() {
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
           {/* Animated Logo */}
-          <div className="mb-8 flex justify-center">
+          <div className="mb-4 flex justify-center">
             <AnimatedLogo variant="coin-drop" size={96} />
           </div>
 
@@ -82,13 +81,13 @@ export default function HeroSection() {
           transition={{ duration: 0.8, ease: "easeOut", delay: 0.3 }}
         >
           <div className="relative z-10 mx-auto max-w-5xl overflow-hidden rounded-xl shadow-[0_0_50px_rgba(124,58,237,0.2)]">
-            <Image
-              src="/overview.png"
-              alt="VAKS Platform"
-              width={1920}
-              height={1080}
+            <video
+              src="/banner.mp4"
               className="h-auto w-full rounded-xl border border-vaks-light-stroke dark:border-vaks-dark-stroke"
-              priority
+              autoPlay
+              loop
+              muted
+              playsInline
             />
           </div>
         </motion.div>

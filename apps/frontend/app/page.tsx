@@ -77,13 +77,13 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex flex-1 justify-center">
-                  <Image
-                    src="/overview.png"
-                    alt="VAKS Platform"
-                    width={565}
-                    height={463}
+                  <video
+                    src="/bannerzinho.mp4"
                     className="h-auto w-full max-w-md rounded-xl"
-                    priority
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
                   />
                 </div>
               </div>
