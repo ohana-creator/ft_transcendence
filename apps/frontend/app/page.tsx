@@ -14,19 +14,17 @@ import { useI18n } from '@/locales';
 import HeroSection from '@/components/landing/hero';
 import { NavBar } from '@/components/landing/tubelight-navbar';
 import { Footer } from '@/components/landing/footer';
-import { Features } from '@/components/landing/features';
 import { FeaturesSectionWithHoverEffects } from '@/components/landing/feature-section-with-hover-effects';
 import { ContainerScroll } from '@/components/landing/container-scroll-animation';
 import { HeroHighlight, Highlight } from '@/components/landing/hero-highlight';
 
 export default function Home() {
   const members = [
-    { name: 'Ohana Bento', role: 'Função 1', image: '/file.svg', instragram: 'https://www.instagram.com/ohana_bento/', linkedin: 'https://www.linkedin.com/in/ohana-bento/', github: 'https://github.com/ohana-creator' },
-    { name: 'Melzira Ebo', role: 'Função 2', image: '/file.svg', instragram: 'https://www.instagram.com/shelby__ebo/', linkedin: 'https://www.linkedin.com/in/orisa-melzira-ebo-aab95a267/', github: 'https://github.com/ShelbyEbo/' },
-    { name: 'Joisson Miguel', role: 'Função 3', image: '/file.svg', instragram: 'https://www.instagram.com/joissonm/', linkedin: 'https://www.linkedin.com/in/joisson-miguel/', github: 'https://github.com/joissonm1' },
-    { name: 'Kelson Pedro', role: 'Função 4', image: '/file.svg', instragram: 'https://www.instagram.com/shelby__ebo/', linkedin: 'https://www.linkedin.com/in/kelson-pedro-760a16381/', github: 'https://github.com/Kelson-D-Pedro' },
+    { name: 'Ohana Bento', role: 'Product Owner/Developer', image: '/ohana.png', instagram: 'https://www.instagram.com/ohana_bento/', linkedin: 'https://www.linkedin.com/in/ohana-bento/', github: 'https://github.com/ohana-creator' },
+    { name: 'Melzira Ebo', role: 'Product Manager/Developer', image: '/melzira.png', instagram: 'https://www.instagram.com/shelby__ebo/', linkedin: 'https://www.linkedin.com/in/orisa-melzira-ebo-aab95a267/', github: 'https://github.com/ShelbyEbo/' },
+    { name: 'Kelson Pedro', role: 'Architect/Developer', image: '/kelson.png', instagram: 'https://www.instagram.com/shelby__ebo/', linkedin: 'https://www.linkedin.com/in/kelson-pedro-760a16381/', github: 'https://github.com/Kelson-D-Pedro' },
+    { name: 'Joisson Miguel', role: 'Frontend Developer', image: '/joisson.png', instagram: 'https://www.instagram.com/joissonm/', linkedin: 'https://www.linkedin.com/in/joisson-miguel/', github: 'https://github.com/joissonm1' },
   ];
-  const { theme } = useTheme();
   const { t } = useI18n();
   const landing = t.landing;
 
@@ -153,30 +151,44 @@ export default function Home() {
         <FeaturesSectionWithHoverEffects />
       </div>
 
-      {/* Equipa */}
+     {/* Equipa */}
       <section id="team-project" className="py-16 px-6 max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">
           {landing.team}
         </h1>
         <div className="py-20 grid grid-cols-1 sm:grid-cols-2 gap-12 md:gap-20">
           {members.map((member) => (
-            <div key={member.name} className="flex flex-col items-center">
-              <Image
-                src={member.image}
-                alt={member.name}
-                width={150}
-                height={150}
-                className="rounded-md"
-              />
-              <h3 className="text-lg py-2 font-semibold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">
-                {member.name}
-              </h3>
-              <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">
-                {member.role}
-              </p>
+            <div
+                key={member.name}
+                className="relative bg-white dark:bg-vaks-dark-purple-card border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover rounded-[20px] overflow-hidden group transition-transform duration-300 hover:-translate-y-1"
+              >
+                {/* Imagem */}
+                <div className="relative w-full aspect-square overflow-hidden bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card">
+                  <Image
+                    src={member.image}
+                    alt={member.name}
+                    fill
+                    className="object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                  />
+                  {/* Badge de área */}
+                  <span className="absolute top-3 left-3 text-[10px] font-semibold tracking-widest uppercase px-3 py-1 rounded-full bg-white/85 text-vaks-purple backdrop-blur-sm border border-vaks-purple/15">
+                    {member.role}
+                  </span>
+                </div>
+
+                {/* Corpo */}
+                <div className="px-4 pt-4 pb-3">
+                  <h3 className="font-syne text-[15px] font-bold tracking-tight text-vaks-light-main-txt dark:text-vaks-dark-main-txt mb-0.5">
+                    {member.name}
+                  </h3>
+                  <p className="text-[12px] italic font-light text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt mb-3">
+                    {member.role}
+                  </p>
+
+                  <div className="h-px bg-vaks-light-purple-card-hover dark:bg-vaks-dark-purple-card-hover mb-3" />
               <div className="flex gap-3 py-2">
                 <Link
-                  href={member.instragram}
+                  href={member.instagram}
                   className="w-9 h-9 border-2 border-vaks-light-main-txt dark:border-vaks-dark-main-txt hover:bg-vaks-light-purple-card-hover dark:hover:bg-vaks-dark-purple-button rounded-full flex items-center justify-center transition-colors"
                 >
                   <Instagram className="w-5 h-5 text-vaks-dark dark:text-vaks-white"/>
@@ -195,6 +207,7 @@ export default function Home() {
                 </Link>
               </div>
             </div>
+          </div>
           ))}
         </div>
       </section>
@@ -203,7 +216,7 @@ export default function Home() {
       <Footer
         members={members.map((m) => ({
           name: m.name,
-          instagram: m.instragram,
+          instagram: m.instagram,
           linkedin: m.linkedin,
           github: m.github,
         }))}

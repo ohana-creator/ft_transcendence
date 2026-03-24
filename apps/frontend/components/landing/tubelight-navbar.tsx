@@ -49,28 +49,59 @@ export function NavBar({ items, className }: NavBarProps) {
   /* ---------------- SCROLL SPY ---------------- */
 
   useEffect(() => {
-    const sections = items
-      .map((item) => document.querySelector(item.url))
-      .filter(Boolean)
+    const navOffset = 96
+    const sectionElements = items
+      .map((item) => document.querySelector(item.url) as HTMLElement | null)
+      .filter(Boolean) as HTMLElement[]
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveTab(entry.target.id)
-          }
-        })
-      },
-      {
-        threshold: 0.6,
+    if (!sectionElements.length) return
+
+    let ticking = false
+
+    const updateActiveByScroll = () => {
+      const scrollY = window.scrollY
+      const viewportBottom = scrollY + window.innerHeight
+      const docHeight = document.documentElement.scrollHeight
+
+      // fim da página => última secção ativa
+      if (viewportBottom >= docHeight - 4) {
+        setActiveTab(sectionElements[sectionElements.length - 1].id)
+        return
       }
-    )
 
-    sections.forEach((section) => {
-      if (section) observer.observe(section)
-    })
+      // encontra a última secção cujo topo já passou da navbar
+      let currentId = sectionElements[0].id
 
-    return () => observer.disconnect()
+      for (const section of sectionElements) {
+        // Usa `section.offsetTop` fixo em relação à página para ser consistente no scroll
+        const top = section.offsetTop - navOffset
+        if (scrollY >= top - 10) { // pequena margem de 10px para ativar logo a seguir a passar
+          currentId = section.id
+        }
+      }
+
+      setActiveTab((prev) => (prev === currentId ? prev : currentId))
+    }
+
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        updateActiveByScroll()
+        ticking = false
+      })
+    }
+
+    // inicializa estado correto
+    updateActiveByScroll()
+
+    window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", updateActiveByScroll)
+
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", updateActiveByScroll)
+    }
   }, [items])
 
   /* ---------------- SCROLL TO SECTION ---------------- */
@@ -79,6 +110,7 @@ export function NavBar({ items, className }: NavBarProps) {
     const section = document.querySelector(url)
 
     if (section) {
+      setActiveTab(url.replace("#", ""))
       section.scrollIntoView({
         behavior: "smooth",
         block: "start",
