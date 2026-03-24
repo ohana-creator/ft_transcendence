@@ -1,0 +1,80 @@
+generator client {
+  provider     = "prisma-client-js"
+  output       = "../node_modules/.prisma/client"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Campaign {
+  id            String           @id @default(uuid())
+  title         String
+  description   String
+  isPrivate     Boolean          @default(false)
+  goalAmount    Decimal?           @db.Decimal(18, 2)
+  goalVisible   Boolean          @default(true)
+  currentAmount Decimal            @default(0) @db.Decimal(18, 2)
+  deadline      DateTime?
+  ownerId       String
+  ownerUsername String
+  status        CampaignStatus   @default(ACTIVE)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  closedAt      DateTime?
+  members       CampaignMember[]
+  invitations   Invitation[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([isPrivate])
+}
+
+model CampaignMember {
+  id         String     @id @default(uuid())
+  campaignId String
+  campaign   Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String
+  username   String
+  role       MemberRole @default(VAKER)
+  joinedAt   DateTime   @default(now())
+
+  @@unique([campaignId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id            String       @id @default(uuid())
+  campaignId    String
+  campaign      Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  invitedUserId String?
+  invitedEmail  String?
+  inviterId     String
+  inviterName   String
+  status        InviteStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  respondedAt   DateTime?
+
+  @@index([invitedUserId])
+  @@index([campaignId])
+}
+
+enum CampaignStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum MemberRole {
+  SUDO
+  VAKER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}

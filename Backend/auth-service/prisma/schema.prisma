@@ -1,0 +1,27 @@
+generator client {
+  provider     = "prisma-client-js"
+  output       = "../node_modules/.prisma/client"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  username       String       @unique
+  hashedPassword String?
+  googleId       String?      @unique
+  twoFASecret    String?
+  twoFAEnabled   Boolean      @default(false)
+  authProvider   AuthProvider @default(LOCAL)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
