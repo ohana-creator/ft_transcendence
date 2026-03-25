@@ -61,7 +61,74 @@ export default function Verificacao2FAPage() {
     inputRefs.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus()
     if (pasted.length === CODE_LENGTH) handleVerify(pasted)
   }
+/*
+const handleVerify = async (finalCode: string) => {
+  setLoading(true);
+  setError(false);
 
+  try {
+    // tempToken guardado no localStorage quando o login devolveu 2FA pendente
+    const tempToken = localStorage.getItem('vaks:temp_token');
+
+    if (!tempToken) {
+      // token expirou ou não existe — volta ao login
+      router.push('/auth/login');
+      return;
+    }
+
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/2fa/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tempToken,
+        code: finalCode,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(true);
+      setCode(Array(CODE_LENGTH).fill(''));
+      setTimeout(() => inputRefs.current[0]?.focus(), 50);
+      return;
+    }
+
+    // troca o tempToken pelo token definitivo
+    localStorage.removeItem('vaks:temp_token');
+    localStorage.setItem('vaks:token', data.access_token);
+
+    router.push('/dashboard');
+
+  } catch {
+    setError(true);
+    setCode(Array(CODE_LENGTH).fill(''));
+    setTimeout(() => inputRefs.current[0]?.focus(), 50);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleResend = async () => {
+  setResendCooldown(60);
+  setCode(Array(CODE_LENGTH).fill(''));
+  setError(false);
+  setTimeout(() => inputRefs.current[0]?.focus(), 50);
+
+  try {
+    const tempToken = localStorage.getItem('vaks:temp_token');
+    if (!tempToken) { router.push('/auth/login'); return; }
+
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/2fa/resend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tempToken }),
+    });
+  } catch {
+    // falha silenciosa — o countdown já começou
+  }
+};
+*/
   const handleVerify = async (finalCode: string) => {
     setLoading(true)
     await new Promise(r => setTimeout(r, 1200)) // substituir por chamada real

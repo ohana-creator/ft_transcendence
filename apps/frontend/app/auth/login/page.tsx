@@ -1,13 +1,13 @@
 "use client";
 
 import { useI18n } from "@/locales";
-import { useTheme } from "next-themes";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Mail, Lock, Eye, EyeOff, Facebook } from "lucide-react";
+import { Mail, Eye, EyeOff, Facebook } from "lucide-react";
 import { AppInput } from "@/components/auth/app-input";
 import Link from "next/link";
+import { motion } from "framer-motion";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,8 +17,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { theme } = useTheme();
-
+  const [error, setError] = useState<string | null>(null);
   /* ── cursor-glow state ── */
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
@@ -28,6 +27,51 @@ export default function LoginPage() {
     setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
+  /*
+  async function handleLogin() {
+  setLoading(true);
+  setError(null);
+
+  if (!email.trim() || !password.trim()) {
+    setError(t.erros.erro_generico);
+    setLoading(false);
+    return;
+  }
+
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: email, // aceita email ou username
+        password,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const mensagem = Array.isArray(data.message)
+        ? data.message[0]
+        : data.message;
+      setError(mensagem ?? login.erro);
+      return;
+    }
+
+    // Guarda o token se o backend devolver
+    if (data.access_token) {
+      localStorage.setItem('vaks:token', data.access_token);
+    }
+
+    router.push('/auth/twofactor');
+
+  } catch {
+    setError(login.erro);
+  } finally {
+    setLoading(false);
+  }
+}
+  */
   async function handleLogin() {
     setLoading(true);
     if (!email.trim() || !password.trim()) {
@@ -118,6 +162,16 @@ export default function LoginPage() {
                 </Link>
               </div>
             </div>
+
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2.5 text-xs font-medium text-vaks-light-error dark:text-vaks-dark-error"
+              >
+                {error}
+              </motion.p>
+            )}
 
             {/* Botão principal */}
             <button

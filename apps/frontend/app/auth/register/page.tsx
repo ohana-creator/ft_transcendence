@@ -17,10 +17,6 @@ export default function RegisterPage() {
 
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
-  const [phone, setPhone] = useState("");
-  const [birthDay, setBirthDay] = useState("");
-  const [birthMonth, setBirthMonth] = useState("");
-  const [birthYear, setBirthYear] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
@@ -36,7 +32,57 @@ export default function RegisterPage() {
     const rect = e.currentTarget.getBoundingClientRect();
     setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
+  /*
+  function validate(): string | null {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return t.registar.erro_email;
+  if (!/^[a-zA-Z0-9_]{3,30}$/.test(username))
+    return t.registar.erro_username;
+  if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password))
+    return t.registar.erro_senha;
+  return null;
+}
+  async function handleRegister() {
+  if (!agreed) return;
 
+   const validationError = validate();
+  if (validationError) { setError(validationError); return; }
+
+  setLoading(true);
+  setError(null);
+
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        username,
+        password,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      // NestJS devolve { message: string | string[], statusCode: number }
+      const mensagem = Array.isArray(data.message)
+        ? data.message[0]
+        : data.message;
+      setError(mensagem);
+      return;
+    }
+
+    // Registo com sucesso — redireciona
+    router.push('/dashboard');
+
+  } catch {
+    setError(t.registar.erro);
+  } finally {
+    setLoading(false);
+  }
+}
+*/
   async function handleRegister() {
     if (!agreed) return;
     setLoading(true);
@@ -160,66 +206,6 @@ export default function RegisterPage() {
                   icon={<User className="h-4 w-4" />}
                 />
               </div>
-
-              {/* Data de nascimento */}
-              <div>
-                <div className="mb-2 flex gap-1">
-                  <span className="text-sm font-bold text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">
-                    {register.date}
-                  </span>
-                  <span className="text-vaks-light-error dark:text-vaks-dark-error">*</span>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-1/4">
-                    <AppInput
-                      type="number"
-                      placeholder="DD"
-                      value={birthDay}
-                      onChange={(e) => setBirthDay(e.target.value)}
-                      className="text-center"
-                      wrapperClassName="min-w-0!"
-                    />
-                  </div>
-                  <div className="w-1/4">
-                    <AppInput
-                      type="number"
-                      placeholder="MM"
-                      value={birthMonth}
-                      onChange={(e) => setBirthMonth(e.target.value)}
-                      className="text-center"
-                      wrapperClassName="min-w-0!"
-                    />
-                  </div>
-                  <div className="w-2/4">
-                    <AppInput
-                      type="number"
-                      placeholder="AAAA"
-                      value={birthYear}
-                      onChange={(e) => setBirthYear(e.target.value)}
-                      className="text-center"
-                      wrapperClassName="min-w-0!"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Telefone */}
-              <div>
-                <div className="mb-2 flex gap-1">
-                  <span className="text-sm font-bold text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">
-                    {register.telefone}
-                  </span>
-                  <span className="text-vaks-light-error dark:text-vaks-dark-error">*</span>
-                </div>
-                <AppInput
-                  type="tel"
-                  placeholder="+351 912 345 678"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  icon={<Phone className="h-4 w-4" />}
-                />
-              </div>
-
               {/* Senha */}
               <div>
                 <div className="mb-2 flex gap-1">

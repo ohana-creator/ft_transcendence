@@ -17,6 +17,42 @@ export default function RecuperarSenhaPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
 
+  /*
+    const handleSubmit = async () => {
+    if (!email.trim()) return
+    setLoading(true)
+    setError(null)
+ 
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+ 
+      // mesmo que o email não exista o backend deve devolver 200
+      // para não revelar se o email está registado (segurança)
+      if (!res.ok) {
+        const data = await res.json()
+        const mensagem = Array.isArray(data.message) ? data.message[0] : data.message
+        setError(mensagem ?? t.erros.erro_generico)
+        return
+      }
+ 
+      setStep('sent')
+ 
+    } catch {
+      setError(t.erros.erro_generico)
+    } finally {
+      setLoading(false)
+    }
+  }
+ 
+  const handleResend = async () => {
+    setStep('email')
+    // ao voltar ao step email o utilizador pode reenviar
+  }
+  */
   const handleSubmit = async () => {
     if (!email) return
     setLoading(true)
