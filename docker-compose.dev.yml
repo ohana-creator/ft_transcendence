@@ -21,6 +21,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: api-gateway-dev
     restart: unless-stopped
+    dns: 127.0.0.11
     ports:
       - "3000:3000"
     environment:
@@ -77,6 +78,7 @@ services:
       context: ./Backend/auth-service
       dockerfile: Dockerfile.dev
     container_name: auth-service-dev
+    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - "3001:3001"
@@ -141,6 +143,7 @@ services:
       context: ./Backend/campaign-service
       dockerfile: Dockerfile.dev
     container_name: campaign-service-dev
+    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - "3002:3002"
@@ -202,6 +205,7 @@ services:
       context: ./Backend/notification-service
       dockerfile: Dockerfile.dev
     container_name: notification-service-dev
+    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - "3003:3003"
@@ -261,6 +265,7 @@ services:
       context: ./Backend/user-service
       dockerfile: Dockerfile.dev
     container_name: user-service-dev
+    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - "3004:3004"
@@ -325,6 +330,7 @@ services:
       context: ./Backend/wallet-service
       dockerfile: Dockerfile.dev
     container_name: wallet-service-dev
+    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - "3005:3005"
@@ -385,6 +391,7 @@ services:
       context: ./Backend/ledger-service
       dockerfile: Dockerfile.dev
     container_name: ledger-service-dev
+    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - "3006:3006"

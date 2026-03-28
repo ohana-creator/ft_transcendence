@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsBoolean, IsNumber, MinLength, MaxLength, Min } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsBoolean, IsNumber, MinLength, MaxLength, Min, IsUrl } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -16,6 +16,12 @@ export class UpdateCampaignDto {
   @MinLength(20)
   @MaxLength(5000)
   description?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @IsUrl()
+  imageUrl?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -8,8 +8,15 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
-    { cors: true },
   );
+
+  // ── CORS Configuration ──────────────────────────────────
+  app.enableCors({
+    origin: true, // Em produção, especificar domínios permitidos
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+  });
 
   // ── Parsers de conteúdo adicionais ──────────────────────
   // O gateway precisa de encaminhar multipart/form-data (ex: upload de avatar)

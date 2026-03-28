@@ -5,6 +5,7 @@ services:
     build: ./Backend/api-gateway
     image: api-gateway
     container_name: api-gateway
+    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - ${API_GATEWAY_PORT}:3000
@@ -53,6 +54,7 @@ services:
     build: ./Backend/auth-service
     image: auth-service
     container_name: auth-service
+    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - jwt_secret
@@ -107,6 +109,7 @@ services:
     build: ./Backend/campaign-service
     image: campaign-service
     container_name: campaign-service
+    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - campaign_db_password
@@ -157,6 +160,7 @@ services:
     build: ./Backend/notification-service
     image: notification-service
     container_name: notification-service
+    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - notification_db_password
@@ -205,6 +209,7 @@ services:
     build: ./Backend/user-service
     image: user-service
     container_name: user-service
+    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - user_db_password
@@ -257,6 +262,7 @@ services:
     build: ./Backend/wallet-service
     image: wallet-service
     container_name: wallet-service
+    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - wallet_db_password
@@ -306,6 +312,7 @@ services:
     build: ./Backend/ledger-service
     image: ledger-service
     container_name: ledger-service
+    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - ledger_db_password

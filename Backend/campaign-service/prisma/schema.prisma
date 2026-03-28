@@ -12,6 +12,7 @@ model Campaign {
   id            String           @id @default(uuid())
   title         String
   description   String
+  imageUrl      String?
   isPrivate     Boolean          @default(false)
   goalAmount    Decimal?           @db.Decimal(18, 2)
   goalVisible   Boolean          @default(true)
