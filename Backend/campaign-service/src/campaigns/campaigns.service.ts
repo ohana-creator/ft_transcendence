@@ -88,7 +88,7 @@ export class CampaignsService {
         take: limit,
         orderBy: { [sortBy]: 'desc' },
         select: {
-          id: true, title: true, description: true, isPrivate: true,
+          id: true, title: true, description: true, imageUrl: true, isPrivate: true,
           goalAmount: true, goalVisible: true, currentAmount: true,
           deadline: true, ownerId: true, ownerUsername: true,
           status: true, createdAt: true,
