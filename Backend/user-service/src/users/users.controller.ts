@@ -1,7 +1,7 @@
 import {
   Controller, Get, Put, Post, Delete,
-  Param, Query, Body,
-  HttpCode, HttpStatus, Req, UseGuards,
+  Param, Query, Body, Req,
+  HttpCode, HttpStatus, UseGuards,
   ForbiddenException, BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -9,6 +9,7 @@ import { UsersService } from './users.service';
 import { AvatarService } from './avatar/avatar.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
+import { HeatmapQueryDto } from './dto/heatmap-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { FastifyRequest } from 'fastify';
@@ -25,6 +26,48 @@ export class UsersController {
   @ApiOperation({ summary: 'Search users by username or email' })
   search(@Query() dto: SearchUsersDto) {
     return this.usersService.search(dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/stats')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get profile stats for authenticated user' })
+  getMyStats(
+    @CurrentUser() user: { userId: string },
+    @Req() req: FastifyRequest,
+  ) {
+    const authHeader = typeof req.headers.authorization === 'string'
+      ? req.headers.authorization
+      : undefined;
+    return this.usersService.getProfileStats(user.userId, authHeader);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/contributions/heatmap')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get contribution heatmap (year/month)' })
+  getMyContributionHeatmap(
+    @CurrentUser() user: { userId: string },
+    @Query() query: HeatmapQueryDto,
+    @Req() req: FastifyRequest,
+  ) {
+    const authHeader = typeof req.headers.authorization === 'string'
+      ? req.headers.authorization
+      : undefined;
+    return this.usersService.getContributionHeatmap(user.userId, query, authHeader);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/contributions/years')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get years with user contributions' })
+  getMyContributionYears(
+    @Req() req: FastifyRequest,
+  ) {
+    const authHeader = typeof req.headers.authorization === 'string'
+      ? req.headers.authorization
+      : undefined;
+    return this.usersService.getContributionYears(authHeader);
   }
 
   @Get(':id')

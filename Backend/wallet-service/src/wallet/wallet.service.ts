@@ -4,12 +4,17 @@ import { RedisService } from "src/redis/redis.service";
 import { UnauthorizedException,
     NotFoundException,
     BadRequestException,
+    ConflictException,
     Injectable,
     Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { TransferDto } from "./dto/transfer.dto";
 import { DepositDto } from "./dto/deposit.dto";
 import { TransactionsQueryDto } from "./dto/transactions-query.dto";
 import { CampaignContributeDto } from "./dto/campaign-contribute.dto";
+import { TopupDto } from "./dto/topup.dto";
+import { ConfirmTopupDto } from "./dto/confirm-topup.dto";
+import { randomUUID } from "node:crypto";
 
 const STREAM = 'wallet-events';
 
@@ -34,12 +39,16 @@ type LedgerMintFailedPayload = {
 export class WalletService
 {
     private readonly logger = new Logger(WalletService.name);
+    private readonly userServiceUrl?: string;
 
     constructor(
         private readonly conn: PrismaService,
         private readonly redis: RedisService,
+        private readonly config: ConfigService,
     )
-    {}
+    {
+        this.userServiceUrl = this.config.get<string>('USER_SERVICE_URL');
+    }
 
     async createWallet(userId: string, initialBalance: number = 0)
     {
@@ -82,24 +91,29 @@ export class WalletService
 
     async getWalletByUserId(userId: string)
     {
-        const wallet = await this.conn.wallet.findUnique({ where: { userId } });
-        if (!wallet) throw new NotFoundException('WALLET_NOT_FOUND');
+        const wallet = await this.ensureWallet(userId);
         return (wallet);
     }
 
     async getBalance(userId: string)
     {
         const wallet = await this.getWalletByUserId(userId);
-        return ({ balance: wallet.balance });
+        return ({ balance: wallet.balance.toString(), currency: 'VAKS' });
     }
 
-    async transfer(fromUserId: string, dto: TransferDto)
+    async transfer(fromUser: { userId: string; username?: string }, dto: TransferDto)
     {
+        const fromUserId = fromUser.userId;
         const { toUserId, amount, note } = dto;
 
         if (fromUserId === toUserId) {
             throw new BadRequestException('CANNOT_TRANSFER_TO_SELF');
         }
+
+        await this.ensureWallet(fromUserId);
+        const recipientProfile = await this.getUserProfile(toUserId);
+        const toUsername = recipientProfile?.username ?? toUserId;
+        const fromUsername = fromUser.username ?? fromUserId;
 
         try {
             // Transação atómica com isolamento serializable
@@ -128,7 +142,7 @@ export class WalletService
                 // 2. Verificar saldo
                 if (Number(fromWallet.balance) < amount)
                 {
-                    throw new BadRequestException('INSUFFICIENT_FUNDS');
+                    throw new ConflictException('INSUFFICIENT_FUNDS');
                 }
 
                 // 3. Debitar remetente
@@ -151,7 +165,13 @@ export class WalletService
                     amount,
                     type: 'P2P_TRANSFER',
                     status: 'COMPLETED',
-                    metadata: note ? { note } : undefined,
+                    metadata: {
+                        note: note ?? null,
+                        fromUserId,
+                        toUserId,
+                        fromUsername,
+                        toUsername,
+                    },
                 },
                 });
 
@@ -169,6 +189,8 @@ export class WalletService
                 transactionId: result.transaction.id,
                 fromUserId,
                 toUserId,
+                fromUsername,
+                toUsername,
                 amount,
             });
 
@@ -178,13 +200,15 @@ export class WalletService
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 const failedTx = await this.recordFailedTransaction(
                     'P2P_TRANSFER', amount, error as Error,
-                    { fromUserId, toUserId, note },
+                    { fromUserId, toUserId, note, fromUsername, toUsername },
                 );
 
                 await this.redis.publish(STREAM, 'transfer.failed', {
                     transactionId: failedTx?.id ?? null,
                     fromUserId,
                     toUserId,
+                    fromUsername,
+                    toUsername,
                     amount,
                     reason: error.message,
                 });
@@ -193,11 +217,59 @@ export class WalletService
         }
     }
 
+    async topup(userId: string, dto: TopupDto)
+    {
+        const mode = dto.mode ?? 'checkout';
+        const provider = dto.provider ?? 'mock';
+
+        if (mode === 'instant') {
+            const note = dto.note ?? `topup:${provider}:instant`;
+            const result = await this.deposit(userId, { amount: dto.amount, note });
+
+            return {
+                status: 'COMPLETED',
+                data: result,
+            };
+        }
+
+        const reference = randomUUID();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        const frontendUrl = (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001').replace(/\/$/, '');
+        const configuredCheckoutPath = this.config.get<string>('TOPUP_CHECKOUT_PATH') ?? '/carteira/carregar';
+        const checkoutPath = configuredCheckoutPath.startsWith('/')
+            ? configuredCheckoutPath
+            : `/${configuredCheckoutPath}`;
+
+        return {
+            status: 'PENDING',
+            provider,
+            reference,
+            amount: dto.amount,
+            currency: 'VAKS',
+            checkoutUrl: `${frontendUrl}${checkoutPath}?ref=${encodeURIComponent(reference)}`,
+            expiresAt,
+            nextAction: 'Confirm payment externally, then call internal confirm endpoint with API key',
+        };
+    }
+
+    async confirmTopup(dto: ConfirmTopupDto)
+    {
+        const note = dto.note ?? `topup:checkout:${dto.reference}`;
+        const result = await this.deposit(dto.userId, { amount: dto.amount, note });
+
+        return {
+            status: 'COMPLETED',
+            reference: dto.reference,
+            data: result,
+        };
+    }
+
     // ── Deposit ──────────────────────────────────────────────
 
     async deposit(userId: string, dto: DepositDto)
     {
         const { amount, note } = dto;
+        await this.ensureWallet(userId);
 
         try {
             const result = await this.conn.$transaction(async (tx) => {
@@ -474,6 +546,7 @@ export class WalletService
     async contributeToCampaign(dto: CampaignContributeDto)
     {
         const { userId, campaignId, amount, campaignTitle } = dto;
+        await this.ensureWallet(userId);
 
         try {
             const result = await this.conn.$transaction(async (tx) => {
@@ -492,7 +565,7 @@ export class WalletService
 
                 // 2. Verificar saldo
                 if (Number(userWallet.balance) < amount) {
-                    throw new BadRequestException('INSUFFICIENT_FUNDS');
+                    throw new ConflictException('INSUFFICIENT_FUNDS');
                 }
 
                 // 3. Debitar utilizador
@@ -655,12 +728,12 @@ export class WalletService
         ]);
 
         return {
-            data: transactions,
-            meta: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
+            data: transactions.map((tx) => this.normalizeTransaction(tx)),
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit),
             },
         };
     }
@@ -678,7 +751,53 @@ export class WalletService
             },
         });
         if (!transaction) throw new NotFoundException('TRANSACTION_NOT_FOUND');
-        return transaction;
+        return this.normalizeTransaction(transaction);
+    }
+
+    private async ensureWallet(userId: string)
+    {
+        let wallet = await this.conn.wallet.findUnique({ where: { userId } });
+        if (!wallet) {
+            wallet = await this.createWallet(userId);
+        }
+        return wallet;
+    }
+
+    private normalizeTransaction(transaction: any)
+    {
+        return {
+            ...transaction,
+            amount: transaction.amount?.toString?.() ?? String(transaction.amount),
+            metadata: transaction.metadata && typeof transaction.metadata === 'object'
+                ? transaction.metadata
+                : {},
+        };
+    }
+
+    private async getUserProfile(userId: string): Promise<{ id: string; username?: string }>
+    {
+        if (!this.userServiceUrl) {
+            return { id: userId };
+        }
+
+        const response = await fetch(`${this.userServiceUrl}/users/${userId}`, { method: 'GET' });
+        if (response.status === 404) {
+            throw new NotFoundException('RECIPIENT_USER_NOT_FOUND');
+        }
+        if (!response.ok) {
+            this.logger.warn(`Could not resolve user profile for ${userId}, status=${response.status}`);
+            return { id: userId };
+        }
+
+        const data = await response.json().catch(() => null);
+        if (!data || typeof data !== 'object') {
+            return { id: userId };
+        }
+
+        return {
+            id: (data as any).id ?? userId,
+            username: (data as any).username,
+        };
     }
 
     private mergeMetadata(current: unknown, extra: Record<string, any>): Record<string, any>
