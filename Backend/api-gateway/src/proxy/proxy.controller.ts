@@ -45,6 +45,77 @@ export class UsersProxyController {
   }
 }
 
+// ── Social (User Service) ──────────────────────────────────
+// Rotas sociais dedicadas no user-service.
+
+@ApiTags('Friends (proxy)')
+@ApiExcludeController()
+@Controller('friends')
+export class FriendsProxyController {
+  constructor(private readonly proxy: ProxyService) {}
+
+  @All()
+  root(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+
+  @All('*')
+  nested(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+}
+
+@ApiTags('Friend Requests (proxy)')
+@ApiExcludeController()
+@Controller('friend-requests')
+export class FriendRequestsProxyController {
+  constructor(private readonly proxy: ProxyService) {}
+
+  @All()
+  root(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+
+  @All('*')
+  nested(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+}
+
+@ApiTags('Blocks (proxy)')
+@ApiExcludeController()
+@Controller('blocks')
+export class BlocksProxyController {
+  constructor(private readonly proxy: ProxyService) {}
+
+  @All()
+  root(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+
+  @All('*')
+  nested(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+}
+
+@ApiTags('Friendship Status (proxy)')
+@ApiExcludeController()
+@Controller('friendship-status')
+export class FriendshipStatusProxyController {
+  constructor(private readonly proxy: ProxyService) {}
+
+  @All()
+  root(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+
+  @All('*')
+  nested(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('users', req, reply);
+  }
+}
+
 // ── Wallet Service ──────────────────────────────────────────
 // Todos os endpoints públicos exigem JWT (validado pelo wallet-service).
 

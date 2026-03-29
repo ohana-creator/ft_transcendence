@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { randomUUID } from 'node:crypto';
 
 /**
  * ProxyService — Encaminha pedidos HTTP para os microserviços backend.
@@ -12,6 +13,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 export class ProxyService {
   private readonly logger = new Logger(ProxyService.name);
   private readonly routes: Record<string, string>;
+  private readonly statusCounters = new Map<string, number>();
 
   constructor(private readonly config: ConfigService) {
     this.routes = {
@@ -47,6 +49,23 @@ export class ProxyService {
     // Rotas internas do microserviço (health, docs/swagger) vivem sem o
     // prefixo do gateway — é necessário reescrever o path.
     const requestUrl = new URL(req.url, 'http://gateway.local');
+    const correlationId = this.getCorrelationId(req);
+    const userId = this.extractUserId(req.headers.authorization);
+    const startedAt = Date.now();
+
+    if (
+      prefix === 'wallet' &&
+      (
+        requestUrl.pathname === '/wallet/campaign' ||
+        requestUrl.pathname.startsWith('/wallet/campaign/') ||
+        requestUrl.pathname === '/wallet/internal' ||
+        requestUrl.pathname.startsWith('/wallet/internal/')
+      )
+    ) {
+      reply.status(404).send({ statusCode: 404, message: 'Not Found' });
+      this.incrementCounter(req.method, requestUrl.pathname, 404);
+      return;
+    }
     const prefixPattern = `/${prefix}/`;
     const prefixExact = `/${prefix}`;
 
@@ -67,7 +86,7 @@ export class ProxyService {
     targetPath = isInternalRoute ? strippedPath : requestUrl.pathname;
     const targetUrl = `${serviceUrl}${targetPath}${requestUrl.search}`;
 
-    this.logger.log(`→ ${req.method} ${req.url} ⇒ ${targetUrl}`);
+    this.logger.log(`[${correlationId}] → ${req.method} ${req.url} ⇒ ${targetUrl} userId=${userId}`);
 
     // Copiar headers relevantes (excluir hop-by-hop headers)
     const headers: Record<string, string> = {};
@@ -80,6 +99,8 @@ export class ProxyService {
         headers[key] = value;
       }
     }
+
+    headers['x-correlation-id'] = correlationId;
 
     // Preparar body (se existir)
     let body: Buffer | string | undefined;
@@ -104,6 +125,7 @@ export class ProxyService {
 
       // Copiar status code
       reply.status(response.status);
+      reply.header('x-correlation-id', correlationId);
 
       // Copiar response headers (excluir hop-by-hop)
       response.headers.forEach((value, key) => {
@@ -120,12 +142,60 @@ export class ProxyService {
       } else {
         reply.send();
       }
+
+      const latencyMs = Date.now() - startedAt;
+      this.incrementCounter(req.method, requestUrl.pathname, response.status);
+      this.logger.log(
+        `[${correlationId}] ← ${req.method} ${requestUrl.pathname} status=${response.status} latency=${latencyMs}ms userId=${userId}`,
+      );
     } catch (error: any) {
       this.logger.error(`Proxy error → ${req.method} ${targetUrl}: ${error.message}`);
+      const latencyMs = Date.now() - startedAt;
+      this.incrementCounter(req.method, requestUrl.pathname, 502);
       reply.status(502).send({
         statusCode: 502,
         message: 'Service unavailable',
       });
+      this.logger.error(
+        `[${correlationId}] ← ${req.method} ${requestUrl.pathname} status=502 latency=${latencyMs}ms userId=${userId}`,
+      );
+    }
+  }
+
+  getMetrics() {
+    return Object.fromEntries(this.statusCounters.entries());
+  }
+
+  private incrementCounter(method: string, path: string, statusCode: number) {
+    const bucket = `${method.toUpperCase()} ${path} ${Math.floor(statusCode / 100)}xx`;
+    this.statusCounters.set(bucket, (this.statusCounters.get(bucket) ?? 0) + 1);
+  }
+
+  private getCorrelationId(req: FastifyRequest): string {
+    const header = req.headers['x-correlation-id'];
+    if (typeof header === 'string' && header.trim()) {
+      return header;
+    }
+    return randomUUID();
+  }
+
+  private extractUserId(authorization?: string | string[]): string {
+    const tokenHeader = Array.isArray(authorization) ? authorization[0] : authorization;
+    if (!tokenHeader?.startsWith('Bearer ')) {
+      return 'anonymous';
+    }
+
+    const token = tokenHeader.slice(7);
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      return 'anonymous';
+    }
+
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as { sub?: string };
+      return payload.sub ?? 'anonymous';
+    } catch {
+      return 'anonymous';
     }
   }
 }

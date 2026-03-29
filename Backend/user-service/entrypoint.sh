@@ -2,9 +2,10 @@
 set -e
 
 # Read passwords from Docker secrets
-DB_PASSWORD=$(cat /run/secrets/user_db_password)
+DB_PASSWORD_RAW=$(cat /run/secrets/user_db_password | tr -d '\n' | tr -d '\r')
+DB_PASSWORD_ENCODED=$(node -p "encodeURIComponent(process.argv[1])" "$DB_PASSWORD_RAW")
 export JWT_SECRET=$(cat /run/secrets/jwt_secret)
-export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
+export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD_ENCODED}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
 export REDIS_PASSWORD=$(cat /run/secrets/redis_password)
 # Read R2 credentials from Docker secrets
 export R2_ACCESS_KEY_ID=$(cat /run/secrets/r2_access_key_id)

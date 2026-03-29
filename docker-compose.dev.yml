@@ -281,6 +281,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
       JWT_SECRET: change_me
+      WALLET_SERVICE_URL: http://wallet-service:3005
       R2_ENDPOINT: ${R2_ENDPOINT:-https://your-account-id.r2.cloudflarestorage.com}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-change_me}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-change_me}
@@ -346,7 +347,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
+      USER_SERVICE_URL: http://user-service:3004
       INTERNAL_API_KEY: change_me_internal
+      FRONTEND_URL: http://localhost:3001
+      TOPUP_CHECKOUT_PATH: /carteira/carregar
     volumes:
       - ./Backend/wallet-service/src:/app/src
       - ./Backend/wallet-service/test:/app/test

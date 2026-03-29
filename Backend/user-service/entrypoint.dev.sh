@@ -3,7 +3,9 @@ set -e
 
 # ── Build DATABASE_URL from env vars ────────────────────────
 if [ -n "$DB_HOST" ] && [ -n "$DB_PASSWORD" ]; then
-  export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
+  DB_PASSWORD_RAW=$(printf '%s' "$DB_PASSWORD" | tr -d '\n' | tr -d '\r')
+  DB_PASSWORD_ENCODED=$(node -p "encodeURIComponent(process.argv[1])" "$DB_PASSWORD_RAW")
+  export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD_ENCODED}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
   echo "✔ DATABASE_URL built from environment variables"
 fi
 

@@ -11,10 +11,43 @@ async function bootstrap() {
   );
 
   // ── CORS Configuration ──────────────────────────────────
+  const normalizeOrigin = (value: string): string => value.replace(/\/$/, '').trim();
+
+  const configuredOrigins = (process.env.FRONTEND_URL ?? '')
+    .split(',')
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean);
+
+  const devOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ];
+
+  const allowedOrigins =
+    process.env.NODE_ENV === 'production'
+      ? configuredOrigins
+      : Array.from(new Set([...configuredOrigins, ...devOrigins]));
+
   app.enableCors({
-    origin: true, // Em produção, especificar domínios permitidos
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedOrigin = normalizeOrigin(origin);
+
+      if (!allowedOrigins.length || allowedOrigins.includes(normalizedOrigin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Origin not allowed by CORS'), false);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-correlation-id'],
     credentials: true,
   });
 
