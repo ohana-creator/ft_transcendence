@@ -116,6 +116,8 @@ services:
       - redis_password
       - internal_api_key
       - jwt_secret
+      - r2_access_key_id
+      - r2_secret_access_key
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: ${CAMPAIGN_SERVICE_PORT}
@@ -127,6 +129,9 @@ services:
       REDIS_PORT: ${REDIS_PORT}
       WALLET_SERVICE_URL: http://wallet-service:${WALLET_SERVICE_PORT}
       INTERNAL_API_KEY_FILE: /run/secrets/internal_api_key
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
     networks:
       - TransNetwork
       - campaignnet

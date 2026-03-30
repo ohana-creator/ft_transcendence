@@ -161,6 +161,11 @@ services:
       JWT_SECRET: change_me
       WALLET_SERVICE_URL: http://wallet-service:3005
       INTERNAL_API_KEY: change_me_internal
+      R2_ENDPOINT: ${R2_ENDPOINT:-https://your-account-id.r2.cloudflarestorage.com}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-change_me}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-change_me}
+      R2_BUCKET: ${R2_BUCKET:-vaks-campaigns}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-https://pub-xxx.r2.dev}
     volumes:
       - ./Backend/campaign-service/src:/app/src
       - ./Backend/campaign-service/test:/app/test

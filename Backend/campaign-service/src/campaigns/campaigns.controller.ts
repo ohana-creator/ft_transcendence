@@ -1,9 +1,25 @@
 import {
-  Controller, Get, Post, Put, Delete,
-  Param, Query, Body, ParseIntPipe,
-  HttpCode, HttpStatus, UseGuards,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Query,
+  Body,
+  ParseIntPipe,
+  UseGuards,
+  BadRequestException,
+  Req,
+  Inject,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
@@ -12,13 +28,90 @@ import { ContributeDto } from './dto/contribute.dto';
 import { InviteDto } from './dto/invite.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import type { FastifyRequest } from 'fastify';
+import type { MultipartFile } from '@fastify/multipart';
+
+type CampaignImageHandler = {
+  saveCampaignImage: (userId: string, file: MultipartFile) => Promise<string>;
+};
+
+const CAMPAIGN_IMAGE_SERVICE = 'CAMPAIGN_IMAGE_SERVICE';
+
+@ApiTags('upload')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('upload')
+export class UploadController {
+  constructor(
+    @Inject(CAMPAIGN_IMAGE_SERVICE)
+    private readonly campaignImageService: CampaignImageHandler,
+  ) {}
+
+  @Post('image')
+  @ApiOperation({ summary: 'Upload campaign image (JPG/PNG/WebP, max 5MB)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  async uploadImage(
+    @CurrentUser() user: { userId: string },
+    @Req() req: FastifyRequest,
+  ) {
+    const file = await req.file();
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+    const imageUrl = await this.campaignImageService.saveCampaignImage(
+      user.userId,
+      file,
+    );
+    return { imageUrl };
+  }
+}
 
 @ApiTags('campaigns')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('campaigns')
 export class CampaignsController {
-  constructor(private readonly campaignsService: CampaignsService) {}
+  constructor(
+    private readonly campaignsService: CampaignsService,
+    @Inject(CAMPAIGN_IMAGE_SERVICE)
+    private readonly campaignImageService: CampaignImageHandler,
+  ) {}
+
+  @Post('upload/image')
+  @ApiOperation({ summary: 'Upload campaign image (JPG/PNG/WebP, max 5MB)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  async uploadImage(
+    @CurrentUser() user: { userId: string },
+    @Req() req: FastifyRequest,
+  ) {
+    const file = await req.file();
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+    const imageUrl = await this.campaignImageService.saveCampaignImage(
+      user.userId,
+      file,
+    );
+    return { imageUrl };
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create campaign' })
@@ -40,10 +133,7 @@ export class CampaignsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get campaign details' })
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: { userId: string },
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user: { userId: string }) {
     return this.campaignsService.findOne(id, user.userId);
   }
 
@@ -59,10 +149,7 @@ export class CampaignsController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Close campaign (owner only)' })
-  close(
-    @Param('id') id: string,
-    @CurrentUser() user: { userId: string },
-  ) {
+  close(@Param('id') id: string, @CurrentUser() user: { userId: string }) {
     return this.campaignsService.close(id, user.userId);
   }
 
@@ -145,7 +232,12 @@ export class InvitationsController {
     @Param('id') id: string,
     @CurrentUser() user: { userId: string; username: string },
   ) {
-    return this.campaignsService.respondInvitation(id, user.userId, user.username, true);
+    return this.campaignsService.respondInvitation(
+      id,
+      user.userId,
+      user.username,
+      true,
+    );
   }
 
   @Post(':id/reject')
@@ -154,6 +246,11 @@ export class InvitationsController {
     @Param('id') id: string,
     @CurrentUser() user: { userId: string; username: string },
   ) {
-    return this.campaignsService.respondInvitation(id, user.userId, user.username, false);
+    return this.campaignsService.respondInvitation(
+      id,
+      user.userId,
+      user.username,
+      false,
+    );
   }
 }

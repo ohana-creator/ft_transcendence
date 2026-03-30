@@ -31,6 +31,7 @@ export class CampaignsService {
       data: {
         title: dto.title,
         description: dto.description,
+        imageUrl: dto.imageUrl,
         isPrivate: dto.isPrivate ?? false,
         goalAmount: dto.goalAmount,
         goalVisible: dto.goalVisible ?? true,

@@ -8,6 +8,8 @@ export JWT_SECRET=$(cat /run/secrets/jwt_secret)
 export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
 export REDIS_PASSWORD=$(cat /run/secrets/redis_password)
 export INTERNAL_API_KEY=$(cat /run/secrets/internal_api_key)
+export R2_ACCESS_KEY_ID=$(cat /run/secrets/r2_access_key_id)
+export R2_SECRET_ACCESS_KEY=$(cat /run/secrets/r2_secret_access_key)
 
 # ── Prisma: generate client + apply migrations ──────────────
 if [ -f "prisma/schema.prisma" ]; then
