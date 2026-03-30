@@ -109,7 +109,6 @@ services:
     build: ./Backend/campaign-service
     image: campaign-service
     container_name: campaign-service
-    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - campaign_db_password
@@ -129,9 +128,14 @@ services:
       REDIS_PORT: ${REDIS_PORT}
       WALLET_SERVICE_URL: http://wallet-service:${WALLET_SERVICE_PORT}
       INTERNAL_API_KEY_FILE: /run/secrets/internal_api_key
+      CAMPAIGN_IMAGE_STORAGE: ${CAMPAIGN_IMAGE_STORAGE:-local}
+      CAMPAIGN_UPLOADS_DIR: /app/uploads
+      CAMPAIGN_PUBLIC_BASE_URL: ${CAMPAIGN_PUBLIC_BASE_URL:-http://localhost:3000}
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_BUCKET: ${R2_BUCKET}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+    volumes:
+      - campaign_uploads:/app/uploads
     networks:
       - TransNetwork
       - campaignnet
@@ -370,6 +374,7 @@ services:
 volumes:
   auth_data:
   campaign_data:
+  campaign_uploads:
   notification_data:
   user_data:
   wallet_data:
