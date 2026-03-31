@@ -1,75 +1,137 @@
-# Upload de Imagem para Criacao de Vaquinha
+# Upload de imagem da vaquinha (Front -> Back)
 
 ## Objetivo
-Permitir upload de imagem em endpoint separado, retornando uma URL publica para ser usada no createCampaign.
+Definir como o frontend deve enviar a imagem para o backend e depois usar a `imageUrl` retornada ao criar a vaquinha.
 
-## Endpoint (recomendado)
-- Metodo: POST
-- Rota: /upload/image
-- Auth: Bearer JWT (obrigatorio)
-- Content-Type: multipart/form-data
-- Campo do ficheiro: file
+## Contrato de upload
 
-## Regras de validacao
-- Tipos permitidos: image/jpeg, image/png, image/webp
-- Tamanho maximo: 5MB
-- Arquivo invalido ou corrompido: rejeitado com erro 400
+### Endpoint
+- Metodo: `POST`
+- URL: `/upload/image`
+- Auth: `Authorization: Bearer <JWT>`
+- Content-Type: `multipart/form-data`
+- Campo do arquivo: `file`
 
-## Processamento no backend
-1. Recebe o ficheiro no endpoint de upload.
-2. Valida tipo e tamanho.
-3. Reprocessa para JPEG (qualidade 85, max 1200x1200, sem ampliar).
-4. Guarda no storage (R2/S3 compativel).
-5. Retorna a URL publica da imagem.
+### Validacoes do backend
+- Tipos permitidos: `image/jpeg`, `image/png`, `image/webp`
+- Tamanho maximo: `5MB`
+- Arquivo invalido/corrompido: `400`
 
-## Resposta esperada
+### Resposta esperada
 ```json
 {
-  "imageUrl": "https://SEU_PUBLIC_URL/campaigns/<userId>/campaign-<timestamp>.jpg"
+  "imageUrl": "http://localhost:3000/uploads/campaigns/<userId>/campaign-<timestamp>.jpg"
 }
 ```
 
-## Fluxo no frontend
-1. Utilizador seleciona imagem.
-2. Frontend faz POST /upload/image com multipart/form-data (campo file).
-3. Frontend recebe imageUrl.
-4. Frontend chama createCampaign com imageUrl no payload:
+## Fluxo correto no frontend
+1. Usuario seleciona imagem.
+2. Front faz upload via `POST /upload/image` com `FormData` e campo `file`.
+3. Front recebe `imageUrl`.
+4. Front envia `POST /campaigns` incluindo `imageUrl` no payload da campanha.
 
+## Exemplo completo (frontend)
+```ts
+async function uploadCampaignImage(file: File, token: string): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch('http://localhost:3000/upload/image', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Falha no upload da imagem: ${response.status} ${errText}`);
+  }
+
+  const data = await response.json() as { imageUrl?: string };
+  if (!data.imageUrl) {
+    throw new Error('Backend nao retornou imageUrl');
+  }
+
+  return data.imageUrl;
+}
+
+async function createCampaignWithImage(input: {
+  title: string;
+  description: string;
+  goalAmount?: number;
+  isPrivate?: boolean;
+  deadline?: string;
+  imageFile?: File;
+  token: string;
+}) {
+  let imageUrl: string | undefined;
+
+  if (input.imageFile) {
+    imageUrl = await uploadCampaignImage(input.imageFile, input.token);
+  }
+
+  const payload = {
+    title: input.title,
+    description: input.description,
+    goalAmount: input.goalAmount,
+    isPrivate: input.isPrivate,
+    deadline: input.deadline,
+    imageUrl,
+  };
+
+  const response = await fetch('http://localhost:3000/campaigns', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${input.token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Falha ao criar vaquinha: ${response.status} ${errText}`);
+  }
+
+  return response.json();
+}
+```
+
+## Exemplo do payload de criacao
 ```json
 {
   "title": "Ajuda para tratamento",
   "description": "Descricao da vaquinha...",
   "goalAmount": 5000,
-  "imageUrl": "https://..."
+  "imageUrl": "http://localhost:3000/uploads/campaigns/USER_ID/campaign-1774967425256.jpg"
 }
 ```
 
-## Exemplo rapido (frontend)
-```ts
-const form = new FormData();
-form.append('file', selectedFile);
+## Erros comuns no frontend
+- Enviar campo diferente de `file` no `FormData`.
+- Tentar enviar base64 no `createCampaign` em vez de fazer upload antes.
+- Criar campanha sem aguardar o retorno de `imageUrl`.
+- Receber `imageUrl` correta, mas o componente de imagem bloquear dominio remoto (ex.: `next/image`).
 
-const uploadRes = await fetch('/upload/image', {
-  method: 'POST',
-  headers: {
-    Authorization: `Bearer ${token}`,
+## Se estiver usando Next.js (`next/image`)
+Se a imagem existe no backend, mas no browser aparece cinza/fallback e erro `/_next/image ... 400`, liberar o dominio no `next.config.js`:
+
+```js
+module.exports = {
+  images: {
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost', port: '3000', pathname: '/uploads/**' },
+      { protocol: 'http', hostname: '127.0.0.1', port: '3000', pathname: '/uploads/**' },
+    ],
   },
-  body: form,
-});
-
-if (!uploadRes.ok) throw new Error('Falha no upload da imagem');
-
-const { imageUrl } = await uploadRes.json();
-
-await createCampaign({
-  title,
-  description,
-  goalAmount,
-  imageUrl,
-});
+};
 ```
 
-## Notas de integracao
-- O endpoint /upload/image e encaminhado pelo api-gateway para o campaign-service.
-- O campaign-service tambem aceita /campaigns/upload/image para compatibilidade interna.
-- Se nao for enviada imagem, createCampaign continua a funcionar com imageUrl opcional.
+Depois disso, reiniciar o frontend.
+
+## Notas de backend
+- `/upload/image` e proxy para o `campaign-service`.
+- A imagem local fica em `CAMPAIGN_UPLOADS_DIR` (padrao `/app/uploads` no Docker).
+- URL publica local e servida em `/uploads/...` pelo gateway.
