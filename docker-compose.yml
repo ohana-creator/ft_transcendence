@@ -54,7 +54,9 @@ services:
     build: ./Backend/auth-service
     image: auth-service
     container_name: auth-service
-    dns: 127.0.0.11
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
     secrets:
       - jwt_secret

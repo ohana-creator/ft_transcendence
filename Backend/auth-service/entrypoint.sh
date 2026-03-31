@@ -47,5 +47,12 @@ if [ -f "prisma/schema.prisma" ]; then
   echo "✔ Prisma ready"
 fi
 
-# Start the application
-exec node dist/src/main.js
+# Start the application (use exec to replace shell, but keep env vars)
+exec env \
+  GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID}" \
+  GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET}" \
+  FORTYTWO_CLIENT_ID="${FORTYTWO_CLIENT_ID}" \
+  FORTYTWO_CLIENT_SECRET="${FORTYTWO_CLIENT_SECRET}" \
+  FACEBOOK_CLIENT_ID="${FACEBOOK_CLIENT_ID}" \
+  FACEBOOK_CLIENT_SECRET="${FACEBOOK_CLIENT_SECRET}" \
+  node dist/src/main.js

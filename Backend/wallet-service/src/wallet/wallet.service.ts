@@ -175,9 +175,14 @@ export class WalletService
                 },
                 });
 
+                // Buscar saldo atualizado do remetente
+                const updatedFromWallet = await tx.wallet.findUnique({
+                    where: { id: fromWallet.id },
+                });
+
                 return ({
                     transaction,
-                    newBalance: Number(fromWallet.balance) - amount,
+                    newBalance: Number(updatedFromWallet.balance),
                 });
             }, {
                 isolationLevel: 'Serializable',
@@ -298,9 +303,14 @@ export class WalletService
                     },
                 });
 
+                // 4. Buscar saldo atualizado após o incremento
+                const updatedWallet = await tx.wallet.findUnique({
+                    where: { id: wallet.id },
+                });
+
                 return ({
                     transaction,
-                    newBalance: Number(wallet.balance) + amount,
+                    newBalance: Number(updatedWallet.balance),
                 });
             }, {
                 isolationLevel: 'Serializable',
@@ -592,9 +602,14 @@ export class WalletService
                     },
                 });
 
+                // 6. Buscar saldo atualizado do usuário
+                const updatedUserWallet = await tx.wallet.findUnique({
+                    where: { id: userWallet.id },
+                });
+
                 return {
                     transaction,
-                    newBalance: Number(userWallet.balance) - amount,
+                    newBalance: Number(updatedUserWallet.balance),
                 };
             }, {
                 isolationLevel: 'Serializable',
@@ -678,9 +693,14 @@ export class WalletService
                 },
             });
 
+            // 6. Buscar saldo atualizado do usuário
+            const updatedUserWallet = await tx.wallet.findUnique({
+                where: { id: userWallet.id },
+            });
+
             return {
                 transaction,
-                newBalance: Number(userWallet.balance) + amount,
+                newBalance: Number(updatedUserWallet.balance),
             };
         }, {
             isolationLevel: 'Serializable',

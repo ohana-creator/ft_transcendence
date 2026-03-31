@@ -63,14 +63,29 @@ export class UploadController {
     @CurrentUser() user: { userId: string },
     @Req() req: FastifyRequest,
   ) {
+    console.log('[UPLOAD CONTROLLER] Iniciando upload de imagem para userId:', user.userId);
+    console.log('[UPLOAD CONTROLLER] Headers da requisição:', req.headers);
+    
     const file = await req.file();
+    console.log('[UPLOAD CONTROLLER] Arquivo recebido:', {
+      fieldname: file?.fieldname,
+      filename: file?.filename,
+      encoding: file?.encoding,
+      mimetype: file?.mimetype
+    });
+    
     if (!file) {
+      console.error('[UPLOAD CONTROLLER] Erro: Nenhum arquivo fornecido');
       throw new BadRequestException('No file provided');
     }
+    
+    console.log('[UPLOAD CONTROLLER] Chamando saveCampaignImage...');
     const imageUrl = await this.campaignImageService.saveCampaignImage(
       user.userId,
       file,
     );
+    console.log('[UPLOAD CONTROLLER] Upload concluído com sucesso, URL:', imageUrl);
+    
     return { imageUrl };
   }
 }
@@ -102,14 +117,29 @@ export class CampaignsController {
     @CurrentUser() user: { userId: string },
     @Req() req: FastifyRequest,
   ) {
+    console.log('[CAMPAIGN CONTROLLER] Iniciando upload de imagem para userId:', user.userId);
+    console.log('[CAMPAIGN CONTROLLER] Headers da requisição:', req.headers);
+    
     const file = await req.file();
+    console.log('[CAMPAIGN CONTROLLER] Arquivo recebido:', {
+      fieldname: file?.fieldname,
+      filename: file?.filename,
+      encoding: file?.encoding,
+      mimetype: file?.mimetype
+    });
+    
     if (!file) {
+      console.error('[CAMPAIGN CONTROLLER] Erro: Nenhum arquivo fornecido');
       throw new BadRequestException('No file provided');
     }
+    
+    console.log('[CAMPAIGN CONTROLLER] Chamando saveCampaignImage...');
     const imageUrl = await this.campaignImageService.saveCampaignImage(
       user.userId,
       file,
     );
+    console.log('[CAMPAIGN CONTROLLER] Upload concluído com sucesso, URL:', imageUrl);
+    
     return { imageUrl };
   }
 
