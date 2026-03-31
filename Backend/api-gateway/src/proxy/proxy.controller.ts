@@ -157,6 +157,46 @@ export class CampaignsProxyController {
   }
 }
 
+// ── Upload (Campaign Service) ───────────────────────────────
+// Endpoint dedicado de upload de imagem para campanhas.
+
+@ApiTags('Upload (proxy)')
+@ApiExcludeController()
+@Controller('upload')
+export class UploadProxyController {
+  constructor(private readonly proxy: ProxyService) {}
+
+  @All()
+  root(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('campaigns', req, reply);
+  }
+
+  @All('*')
+  nested(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('campaigns', req, reply);
+  }
+}
+
+// ── Upload Assets (Campaign Service) ───────────────────────
+// Expor imagens locais de campanhas em /uploads/*.
+
+@ApiTags('Upload Assets (proxy)')
+@ApiExcludeController()
+@Controller('uploads')
+export class UploadAssetsProxyController {
+  constructor(private readonly proxy: ProxyService) {}
+
+  @All()
+  root(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('campaigns', req, reply);
+  }
+
+  @All('*')
+  nested(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
+    return this.proxy.forward('campaigns', req, reply);
+  }
+}
+
 // ── Invitations (Campaign Service) ──────────────────────────
 // Aceitar/rejeitar convites — rota separada mas servida pelo campaign-service.
 

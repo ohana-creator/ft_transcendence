@@ -8,6 +8,8 @@ import {
   Res,
   HttpCode,
   HttpStatus,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,6 +28,7 @@ import { TwoFAValidateDto } from './dto/two-fa-validate.dto';
 import { JwtGuard } from './guards/jwt-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { SecretsService } from '../config/secrets.service';
 import * as crypto from 'crypto';
 
 @ApiTags('Auth')
@@ -34,6 +37,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly secretsService: SecretsService,
   ) {}
 
   // ── Register ───────────────────────────────────────────
@@ -152,10 +156,9 @@ export class AuthController {
   @Get('google')
   @ApiOperation({ summary: 'Initiate Google OAuth login (redirects to Google)' })
   async googleLogin(@Res({ passthrough: true }) reply) {
-    const clientID = this.configService.get<string>('GOOGLE_CLIENT_ID');
-    const callbackURL = this.configService.get<string>('GOOGLE_CALLBACK_URL');
+    const googleConfig = this.secretsService.getGoogleConfig();
 
-    if (!clientID || !callbackURL) {
+    if (!googleConfig.clientId || !googleConfig.callbackURL) {
       return reply.status(403).send({
         statusCode: 403,
         message: 'Google OAuth not configured',
@@ -167,8 +170,8 @@ export class AuthController {
 
     // Build Google OAuth URL
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    authUrl.searchParams.append('client_id', clientID);
-    authUrl.searchParams.append('redirect_uri', callbackURL);
+    authUrl.searchParams.append('client_id', googleConfig.clientId);
+    authUrl.searchParams.append('redirect_uri', googleConfig.callbackURL);
     authUrl.searchParams.append('response_type', 'code');
     authUrl.searchParams.append('scope', 'email profile');
     authUrl.searchParams.append('access_type', 'offline');
@@ -178,11 +181,265 @@ export class AuthController {
   }
 
   @Get('google/callback')
-  @UseGuards(GoogleAuthGuard)
   @ApiOperation({ summary: 'Google OAuth callback — exchanges code for token' })
   async googleCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
-    const { token } = await this.authService.handleGoogleUser(req.user);
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    try {
+      const { code, state, error } = req.query;
+      console.log('Google callback received:', { code: !!code, state, error });
+      
+      if (error) {
+        console.error('Google OAuth error:', error);
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+        return reply.redirect(`${frontendUrl}/auth/login?error=${error}`);
+      }
+
+      if (!code) {
+        console.error('No code in Google callback');
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+        return reply.redirect(`${frontendUrl}/auth/login?error=no_code`);
+      }
+
+      // Manual Google token exchange
+      const googleConfig = this.secretsService.getGoogleConfig();
+      if (!googleConfig.clientId || !googleConfig.clientSecret) {
+        throw new Error('Google OAuth not configured');
+      }
+
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: googleConfig.clientId,
+          client_secret: googleConfig.clientSecret,
+          redirect_uri: googleConfig.callbackURL,
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        console.error('Google token exchange failed:', errorText);
+        throw new Error('Token exchange failed');
+      }
+
+      const tokenData = await tokenResponse.json();
+      if (!tokenData.access_token) {
+        throw new Error('No access token received');
+      }
+
+      // Get user profile from Google
+      const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+
+      if (!profileResponse.ok) {
+        throw new Error('Failed to fetch Google profile');
+      }
+
+      const profile = await profileResponse.json();
+      console.log('Google profile received:', { email: profile.email, name: profile.name });
+
+      // Process the user
+      const { token } = await this.authService.handleGoogleUser({
+        googleId: profile.id,
+        email: profile.email,
+        displayName: profile.name,
+      });
+
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+      console.log('Redirecting to:', `${frontendUrl}/auth/callback?token=${token.substring(0, 20)}...`);
+      return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+    } catch (error) {
+      console.error('Google callback error:', error);
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+      return reply.redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
+    }
+  }
+
+  // ── 42 OAuth ───────────────────────────────────────────
+
+  @Get('42')
+  @ApiOperation({ summary: 'Initiate 42 OAuth login (redirects to 42)' })
+  async fortyTwoLogin(@Res({ passthrough: true }) reply) {
+    const fortyTwoConfig = this.secretsService.getFortyTwoConfig();
+
+    if (!fortyTwoConfig.clientId || !fortyTwoConfig.callbackURL) {
+      return reply.status(403).send({
+        statusCode: 403,
+        message: '42 OAuth not configured',
+      });
+    }
+
+    const state = crypto.randomUUID();
+
+    const authUrl = new URL('https://api.intra.42.fr/oauth/authorize');
+    authUrl.searchParams.append('client_id', fortyTwoConfig.clientId);
+    authUrl.searchParams.append('redirect_uri', fortyTwoConfig.callbackURL);
+    authUrl.searchParams.append('response_type', 'code');
+    authUrl.searchParams.append('scope', 'public');
+    authUrl.searchParams.append('state', state);
+
+    return reply.code(307).redirect(authUrl.toString());
+  }
+
+  @Get('42/callback')
+  @ApiOperation({ summary: '42 OAuth callback — exchanges code for token' })
+  async fortyTwoCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
+    const fortyTwoConfig = this.secretsService.getFortyTwoConfig();
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+
+    if (!fortyTwoConfig.clientId || !fortyTwoConfig.clientSecret || !fortyTwoConfig.callbackURL) {
+      return reply.status(403).send({
+        statusCode: 403,
+        message: '42 OAuth not configured',
+      });
+    }
+
+    const code = req.query?.code;
+    if (!code || typeof code !== 'string') {
+      throw new BadRequestException('Missing OAuth code for 42 callback');
+    }
+
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: fortyTwoConfig.clientId,
+      client_secret: fortyTwoConfig.clientSecret,
+      code,
+      redirect_uri: fortyTwoConfig.callbackURL,
+    });
+
+    const tokenResp = await fetch('https://api.intra.42.fr/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenBody,
+    });
+
+    if (!tokenResp.ok) {
+      const errorBody = await tokenResp.text();
+      console.error('42 OAuth token exchange failed:', {
+        status: tokenResp.status,
+        body: errorBody,
+        clientID: fortyTwoConfig.clientId,
+        callbackURL: fortyTwoConfig.callbackURL,
+      });
+      throw new UnauthorizedException('Failed to exchange 42 OAuth code');
+    }
+
+    const tokenData = (await tokenResp.json()) as { access_token?: string };
+    if (!tokenData.access_token) {
+      throw new UnauthorizedException('42 OAuth token missing access_token');
+    }
+
+    const meResp = await fetch('https://api.intra.42.fr/v2/me', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!meResp.ok) {
+      throw new UnauthorizedException('Failed to fetch 42 profile');
+    }
+
+    const me = (await meResp.json()) as {
+      email?: string;
+      displayname?: string;
+      login?: string;
+      id?: number;
+    };
+
+    const email = me.email || '';
+    const displayName = me.displayname || me.login || 'forty_two_user';
+
+    const { token } = await this.authService.handleFortyTwoUser({
+      email,
+      displayName,
+    });
+
+    return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+  }
+
+  // ── Facebook OAuth ─────────────────────────────────────
+
+  @Get('facebook')
+  @ApiOperation({ summary: 'Initiate Facebook OAuth login (redirects to Facebook)' })
+  async facebookLogin(@Res({ passthrough: true }) reply) {
+    const facebookConfig = this.secretsService.getFacebookConfig();
+
+    if (!facebookConfig.clientId || !facebookConfig.callbackURL) {
+      return reply.status(403).send({
+        statusCode: 403,
+        message: 'Facebook OAuth not configured',
+      });
+    }
+
+    const state = crypto.randomUUID();
+
+    const authUrl = new URL('https://www.facebook.com/v19.0/dialog/oauth');
+    authUrl.searchParams.append('client_id', facebookConfig.clientId);
+    authUrl.searchParams.append('redirect_uri', facebookConfig.callbackURL);
+    authUrl.searchParams.append('response_type', 'code');
+    authUrl.searchParams.append('scope', 'email,public_profile');
+    authUrl.searchParams.append('state', state);
+
+    return reply.code(307).redirect(authUrl.toString());
+  }
+
+  @Get('facebook/callback')
+  @ApiOperation({ summary: 'Facebook OAuth callback — exchanges code for token' })
+  async facebookCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
+    const facebookConfig = this.secretsService.getFacebookConfig();
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+
+    if (!facebookConfig.clientId || !facebookConfig.clientSecret || !facebookConfig.callbackURL) {
+      return reply.status(403).send({
+        statusCode: 403,
+        message: 'Facebook OAuth not configured',
+      });
+    }
+
+    const code = req.query?.code;
+    if (!code || typeof code !== 'string') {
+      throw new BadRequestException('Missing OAuth code for Facebook callback');
+    }
+
+    const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+    tokenUrl.searchParams.append('client_id', facebookConfig.clientId);
+    tokenUrl.searchParams.append('client_secret', facebookConfig.clientSecret);
+    tokenUrl.searchParams.append('redirect_uri', facebookConfig.callbackURL);
+    tokenUrl.searchParams.append('code', code);
+
+    const tokenResp = await fetch(tokenUrl.toString());
+    if (!tokenResp.ok) {
+      throw new UnauthorizedException('Failed to exchange Facebook OAuth code');
+    }
+
+    const tokenData = (await tokenResp.json()) as { access_token?: string };
+    if (!tokenData.access_token) {
+      throw new UnauthorizedException('Facebook OAuth token missing access_token');
+    }
+
+    const meUrl = new URL('https://graph.facebook.com/me');
+    meUrl.searchParams.append('fields', 'id,name,email');
+    meUrl.searchParams.append('access_token', tokenData.access_token);
+
+    const meResp = await fetch(meUrl.toString());
+    if (!meResp.ok) {
+      throw new UnauthorizedException('Failed to fetch Facebook profile');
+    }
+
+    const me = (await meResp.json()) as {
+      email?: string;
+      name?: string;
+      id?: string;
+    };
+
+    const email = me.email || '';
+    const displayName = me.name || 'facebook_user';
+
+    const { token } = await this.authService.handleFacebookUser({
+      email,
+      displayName,
+    });
+
     return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
   }
 }

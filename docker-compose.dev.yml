@@ -97,7 +97,13 @@ services:
       REDIS_PASSWORD: change_me
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_CALLBACK_URL: http://localhost:3001/auth/google/callback
+      GOOGLE_CALLBACK_URL: http://localhost:3000/auth/google/callback
+      FORTYTWO_CLIENT_ID: ${FORTYTWO_CLIENT_ID:-}
+      FORTYTWO_CLIENT_SECRET: ${FORTYTWO_CLIENT_SECRET:-}
+      FORTYTWO_CALLBACK_URL: http://localhost:3000/auth/42/callback
+      FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
+      FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
+      FACEBOOK_CALLBACK_URL: http://localhost:3000/auth/facebook/callback
       FRONTEND_URL: http://localhost:3000
     volumes:
       - ./Backend/auth-service/src:/app/src
@@ -143,7 +149,6 @@ services:
       context: ./Backend/campaign-service
       dockerfile: Dockerfile.dev
     container_name: campaign-service-dev
-    dns: 127.0.0.11
     restart: unless-stopped
     ports:
       - "3002:3002"
@@ -161,6 +166,14 @@ services:
       JWT_SECRET: change_me
       WALLET_SERVICE_URL: http://wallet-service:3005
       INTERNAL_API_KEY: change_me_internal
+      CAMPAIGN_IMAGE_STORAGE: local
+      CAMPAIGN_UPLOADS_DIR: /app/uploads
+      CAMPAIGN_PUBLIC_BASE_URL: http://localhost:3000
+      R2_ENDPOINT: ${R2_ENDPOINT:-https://your-account-id.r2.cloudflarestorage.com}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-change_me}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-change_me}
+      R2_BUCKET: ${R2_BUCKET:-vaks-campaigns}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-https://pub-xxx.r2.dev}
     volumes:
       - ./Backend/campaign-service/src:/app/src
       - ./Backend/campaign-service/test:/app/test
@@ -169,6 +182,7 @@ services:
       - ./Backend/campaign-service/tsconfig.build.json:/app/tsconfig.build.json
       - ./Backend/campaign-service/nest-cli.json:/app/nest-cli.json
       - ./Backend/campaign-service/prisma.config.ts:/app/prisma.config.ts
+      - ./Backend/campaign-service/uploads:/app/uploads
     networks:
       - devnet
     depends_on:

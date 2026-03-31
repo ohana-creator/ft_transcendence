@@ -2,16 +2,18 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback, Profile } from 'passport-google-oauth20';
+import { SecretsService } from '../../config/secrets.service';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly secretsService: SecretsService,
+  ) {
     const logger = new Logger(GoogleStrategy.name);
-    const clientID = configService.get<string>('GOOGLE_CLIENT_ID') || '';
-    const clientSecret = configService.get<string>('GOOGLE_CLIENT_SECRET') || '';
-    const callbackURL = configService.get<string>('GOOGLE_CALLBACK_URL') || '';
+    const googleConfig = secretsService.getGoogleConfig();
 
-    const oauthConfigured = !!(clientID && clientSecret && callbackURL);
+    const oauthConfigured = !!(googleConfig.clientId && googleConfig.clientSecret && googleConfig.callbackURL);
     if (!oauthConfigured) {
       logger.warn(
         'Google OAuth is not fully configured (GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL). Strategy loaded in disabled mode.',
@@ -19,9 +21,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     }
 
     super({
-      clientID: clientID || '__disabled__',
-      clientSecret: clientSecret || '__disabled__',
-      callbackURL: callbackURL || 'http://localhost:3001/auth/google/callback',
+      clientID: googleConfig.clientId || '__disabled__',
+      clientSecret: googleConfig.clientSecret || '__disabled__',
+      callbackURL: googleConfig.callbackURL || 'http://localhost:3000/auth/google/callback',
       scope: ['email', 'profile'],
     });
   }

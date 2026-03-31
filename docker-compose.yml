@@ -54,7 +54,9 @@ services:
     build: ./Backend/auth-service
     image: auth-service
     container_name: auth-service
-    dns: 127.0.0.11
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
     secrets:
       - jwt_secret
@@ -62,6 +64,10 @@ services:
       - redis_password
       - google_client_id
       - google_client_secret
+      - fortytwo_client_id
+      - fortytwo_client_secret
+      - facebook_client_id
+      - facebook_client_secret
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: ${AUTH_SERVICE_PORT}
@@ -75,6 +81,12 @@ services:
       GOOGLE_CLIENT_ID_FILE: /run/secrets/google_client_id
       GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      FORTYTWO_CLIENT_ID_FILE: /run/secrets/fortytwo_client_id
+      FORTYTWO_CLIENT_SECRET_FILE: /run/secrets/fortytwo_client_secret
+      FORTYTWO_CALLBACK_URL: ${FORTYTWO_CALLBACK_URL}
+      FACEBOOK_CLIENT_ID_FILE: /run/secrets/facebook_client_id
+      FACEBOOK_CLIENT_SECRET_FILE: /run/secrets/facebook_client_secret
+      FACEBOOK_CALLBACK_URL: ${FACEBOOK_CALLBACK_URL}
       FRONTEND_URL: ${FRONTEND_URL}
     networks:
       - TransNetwork
@@ -109,13 +121,14 @@ services:
     build: ./Backend/campaign-service
     image: campaign-service
     container_name: campaign-service
-    dns: 127.0.0.11
     restart: unless-stopped
     secrets:
       - campaign_db_password
       - redis_password
       - internal_api_key
       - jwt_secret
+      - r2_access_key_id
+      - r2_secret_access_key
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: ${CAMPAIGN_SERVICE_PORT}
@@ -127,6 +140,14 @@ services:
       REDIS_PORT: ${REDIS_PORT}
       WALLET_SERVICE_URL: http://wallet-service:${WALLET_SERVICE_PORT}
       INTERNAL_API_KEY_FILE: /run/secrets/internal_api_key
+      CAMPAIGN_IMAGE_STORAGE: ${CAMPAIGN_IMAGE_STORAGE:-local}
+      CAMPAIGN_UPLOADS_DIR: /app/uploads
+      CAMPAIGN_PUBLIC_BASE_URL: ${CAMPAIGN_PUBLIC_BASE_URL:-http://localhost:3000}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+    volumes:
+      - campaign_uploads:/app/uploads
     networks:
       - TransNetwork
       - campaignnet
@@ -365,6 +386,7 @@ services:
 volumes:
   auth_data:
   campaign_data:
+  campaign_uploads:
   notification_data:
   user_data:
   wallet_data:
@@ -379,6 +401,14 @@ secrets:
     file: ./secrets/google_client_id.txt
   google_client_secret:
     file: ./secrets/google_client_secret.txt
+  fortytwo_client_id:
+    file: ./secrets/fortytwo_client_id.txt
+  fortytwo_client_secret:
+    file: ./secrets/fortytwo_client_secret.txt
+  facebook_client_id:
+    file: ./secrets/facebook_client_id.txt
+  facebook_client_secret:
+    file: ./secrets/facebook_client_secret.txt
   jwt_secret:
     file: ./secrets/jwt_secret.txt
   notification_db_password:

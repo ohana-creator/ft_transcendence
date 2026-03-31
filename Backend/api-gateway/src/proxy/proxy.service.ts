@@ -121,6 +121,7 @@ export class ProxyService {
         method: req.method,
         headers,
         body,
+        redirect: 'manual',
       } as RequestInit);
 
       // Copiar status code
