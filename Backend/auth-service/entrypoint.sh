@@ -5,6 +5,26 @@ set -e
 DB_PASSWORD_RAW=$(cat /run/secrets/auth_db_password | tr -d '\n' | tr -d '\r')
 export JWT_SECRET=$(cat /run/secrets/jwt_secret)
 
+# OAuth client credentials may be provided via *_FILE variables.
+if [ -n "$GOOGLE_CLIENT_ID_FILE" ] && [ -f "$GOOGLE_CLIENT_ID_FILE" ]; then
+  export GOOGLE_CLIENT_ID=$(cat "$GOOGLE_CLIENT_ID_FILE" | tr -d '\n' | tr -d '\r')
+fi
+if [ -n "$GOOGLE_CLIENT_SECRET_FILE" ] && [ -f "$GOOGLE_CLIENT_SECRET_FILE" ]; then
+  export GOOGLE_CLIENT_SECRET=$(cat "$GOOGLE_CLIENT_SECRET_FILE" | tr -d '\n' | tr -d '\r')
+fi
+if [ -n "$FORTYTWO_CLIENT_ID_FILE" ] && [ -f "$FORTYTWO_CLIENT_ID_FILE" ]; then
+  export FORTYTWO_CLIENT_ID=$(cat "$FORTYTWO_CLIENT_ID_FILE" | tr -d '\n' | tr -d '\r')
+fi
+if [ -n "$FORTYTWO_CLIENT_SECRET_FILE" ] && [ -f "$FORTYTWO_CLIENT_SECRET_FILE" ]; then
+  export FORTYTWO_CLIENT_SECRET=$(cat "$FORTYTWO_CLIENT_SECRET_FILE" | tr -d '\n' | tr -d '\r')
+fi
+if [ -n "$FACEBOOK_CLIENT_ID_FILE" ] && [ -f "$FACEBOOK_CLIENT_ID_FILE" ]; then
+  export FACEBOOK_CLIENT_ID=$(cat "$FACEBOOK_CLIENT_ID_FILE" | tr -d '\n' | tr -d '\r')
+fi
+if [ -n "$FACEBOOK_CLIENT_SECRET_FILE" ] && [ -f "$FACEBOOK_CLIENT_SECRET_FILE" ]; then
+  export FACEBOOK_CLIENT_SECRET=$(cat "$FACEBOOK_CLIENT_SECRET_FILE" | tr -d '\n' | tr -d '\r')
+fi
+
 # URL encode the password using sed (replace special chars)
 DB_PASSWORD_ENCODED=$(echo "$DB_PASSWORD_RAW" | sed 's/+/%2B/g; s/\//%2F/g; s/=/%3D/g')
 

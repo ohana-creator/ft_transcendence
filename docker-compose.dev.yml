@@ -97,7 +97,13 @@ services:
       REDIS_PASSWORD: change_me
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_CALLBACK_URL: http://localhost:3001/auth/google/callback
+      GOOGLE_CALLBACK_URL: http://localhost:3000/auth/google/callback
+      FORTYTWO_CLIENT_ID: ${FORTYTWO_CLIENT_ID:-}
+      FORTYTWO_CLIENT_SECRET: ${FORTYTWO_CLIENT_SECRET:-}
+      FORTYTWO_CALLBACK_URL: http://localhost:3000/auth/42/callback
+      FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
+      FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
+      FACEBOOK_CALLBACK_URL: http://localhost:3000/auth/facebook/callback
       FRONTEND_URL: http://localhost:3000
     volumes:
       - ./Backend/auth-service/src:/app/src

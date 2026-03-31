@@ -62,6 +62,10 @@ services:
       - redis_password
       - google_client_id
       - google_client_secret
+      - fortytwo_client_id
+      - fortytwo_client_secret
+      - facebook_client_id
+      - facebook_client_secret
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: ${AUTH_SERVICE_PORT}
@@ -75,6 +79,12 @@ services:
       GOOGLE_CLIENT_ID_FILE: /run/secrets/google_client_id
       GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      FORTYTWO_CLIENT_ID_FILE: /run/secrets/fortytwo_client_id
+      FORTYTWO_CLIENT_SECRET_FILE: /run/secrets/fortytwo_client_secret
+      FORTYTWO_CALLBACK_URL: ${FORTYTWO_CALLBACK_URL}
+      FACEBOOK_CLIENT_ID_FILE: /run/secrets/facebook_client_id
+      FACEBOOK_CLIENT_SECRET_FILE: /run/secrets/facebook_client_secret
+      FACEBOOK_CALLBACK_URL: ${FACEBOOK_CALLBACK_URL}
       FRONTEND_URL: ${FRONTEND_URL}
     networks:
       - TransNetwork
@@ -389,6 +399,14 @@ secrets:
     file: ./secrets/google_client_id.txt
   google_client_secret:
     file: ./secrets/google_client_secret.txt
+  fortytwo_client_id:
+    file: ./secrets/fortytwo_client_id.txt
+  fortytwo_client_secret:
+    file: ./secrets/fortytwo_client_secret.txt
+  facebook_client_id:
+    file: ./secrets/facebook_client_id.txt
+  facebook_client_secret:
+    file: ./secrets/facebook_client_secret.txt
   jwt_secret:
     file: ./secrets/jwt_secret.txt
   notification_db_password:

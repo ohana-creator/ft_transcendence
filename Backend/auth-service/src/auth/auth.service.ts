@@ -409,4 +409,112 @@ export class AuthService {
 
     return { token, user: this.sanitizeUser(user) };
   }
+
+  // ── OAuth 42 ─────────────────────────────────────────────
+
+  async handleFortyTwoUser(profile: {
+    email: string;
+    displayName: string;
+  }) {
+    if (!profile.email) {
+      throw new UnauthorizedException('42 account does not provide email');
+    }
+
+    let user = await this.prisma.user.findUnique({
+      where: { email: profile.email },
+    });
+
+    let isNewUser = false;
+
+    if (!user) {
+      let username = profile.displayName
+        .replace(/[^a-zA-Z0-9_]/g, '_')
+        .substring(0, 25);
+
+      const existing = await this.prisma.user.findUnique({
+        where: { username },
+      });
+      if (existing) {
+        username = `${username}_${Date.now().toString(36)}`;
+      }
+
+      user = await this.prisma.user.create({
+        data: {
+          email: profile.email,
+          username,
+          authProvider: 'GOOGLE',
+        },
+      });
+      isNewUser = true;
+    }
+
+    if (isNewUser) {
+      await this.redis.publish('auth-events', 'user.created', {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        authProvider: user.authProvider,
+      });
+    }
+
+    const { token } = this.generateToken(user);
+
+    this.logger.log(`42 login: ${user.email} (new=${isNewUser})`);
+
+    return { token, user: this.sanitizeUser(user) };
+  }
+
+  // ── Facebook OAuth ───────────────────────────────────────
+
+  async handleFacebookUser(profile: {
+    email: string;
+    displayName: string;
+  }) {
+    if (!profile.email) {
+      throw new UnauthorizedException('Facebook account does not provide email');
+    }
+
+    let user = await this.prisma.user.findUnique({
+      where: { email: profile.email },
+    });
+
+    let isNewUser = false;
+
+    if (!user) {
+      let username = profile.displayName
+        .replace(/[^a-zA-Z0-9_]/g, '_')
+        .substring(0, 25);
+
+      const existing = await this.prisma.user.findUnique({
+        where: { username },
+      });
+      if (existing) {
+        username = `${username}_${Date.now().toString(36)}`;
+      }
+
+      user = await this.prisma.user.create({
+        data: {
+          email: profile.email,
+          username,
+          authProvider: 'GOOGLE',
+        },
+      });
+      isNewUser = true;
+    }
+
+    if (isNewUser) {
+      await this.redis.publish('auth-events', 'user.created', {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        authProvider: user.authProvider,
+      });
+    }
+
+    const { token } = this.generateToken(user);
+
+    this.logger.log(`Facebook login: ${user.email} (new=${isNewUser})`);
+
+    return { token, user: this.sanitizeUser(user) };
+  }
 }
