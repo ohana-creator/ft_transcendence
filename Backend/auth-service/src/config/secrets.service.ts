@@ -40,7 +40,7 @@ export class SecretsService {
 
     // Fallback to environment variable
     if (!value) {
-      value = this.configService.get<string>(envVarName);
+      value = this.configService.get<string>(envVarName) ?? null;
       if (value) {
         this.logger.debug(`Read ${envVarName} from environment variable`);
       }

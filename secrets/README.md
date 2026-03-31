@@ -33,6 +33,9 @@ Each `.txt` file contains a single secret value (no trailing newline).
 
 set -euo pipefail
 
+# Ledger signer private key placeholder (hex 0x...)
+printf '%s' 'replace_with_0x_private_key' > admin_private_key.txt
+
 # 1) Generate random secrets (base64, no trailing newline)
 for f in \
   auth_db_password \
@@ -44,9 +47,6 @@ for f in \
   redis_password \
   jwt_secret \
   internal_api_key
-
-# Ledger signer private key (hex 0x...)
-printf '%s' 'replace_with_0x_private_key' > admin_private_key.txt
 do
   openssl rand -base64 48 | tr -d '\n' > "${f}.txt"
 done

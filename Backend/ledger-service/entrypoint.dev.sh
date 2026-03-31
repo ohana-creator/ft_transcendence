@@ -1,8 +1,31 @@
 #!/bin/sh
 set -e
 
+urlencode() {
+  node -e 'process.stdout.write(encodeURIComponent(process.argv[1] ?? ""))' "$1"
+}
+
+trim() {
+  printf '%s' "$1" | tr -d '\r\n'
+}
+
 if [ -n "$DB_HOST" ] && [ -n "$DB_PASSWORD" ]; then
-  export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
+  DB_USER_CLEAN=$(trim "$DB_USER")
+  DB_HOST_CLEAN=$(trim "$DB_HOST")
+  DB_PORT_CLEAN=$(trim "$DB_PORT")
+  DB_NAME_CLEAN=$(trim "$DB_NAME")
+
+  [ -z "$DB_USER_CLEAN" ] && DB_USER_CLEAN="ledger_user"
+  [ -z "$DB_HOST_CLEAN" ] && DB_HOST_CLEAN="ledgerDb"
+  [ -z "$DB_NAME_CLEAN" ] && DB_NAME_CLEAN="ledger"
+  if ! printf '%s' "$DB_PORT_CLEAN" | grep -Eq '^[0-9]+$'; then
+    DB_PORT_CLEAN="5432"
+  fi
+
+  DB_USER_ENC=$(urlencode "$DB_USER_CLEAN")
+  DB_PASSWORD_ENC=$(urlencode "$(trim "$DB_PASSWORD")")
+
+  export DATABASE_URL="postgresql://${DB_USER_ENC}:${DB_PASSWORD_ENC}@${DB_HOST_CLEAN}:${DB_PORT_CLEAN}/${DB_NAME_CLEAN}?schema=public"
   echo "✔ DATABASE_URL built from environment variables"
 fi
 
