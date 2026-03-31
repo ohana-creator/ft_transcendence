@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Post, HttpCode, Body, Query, Param } from '@nestjs/common';
+import { Controller, Get, UseGuards, Post, HttpCode, Body, Query, Param, Header } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiHeader } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { InternalServiceGuard } from '../auth/internal-service.guard.js';
@@ -21,6 +21,7 @@ export class WalletController {
   constructor(private readonly walletService: WalletService) {}
   
   @Get()
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @ApiOperation({ summary: 'Get wallet of authenticated user' })
   async getWallet(@CurrentUser() user: { userId: string })
   {
@@ -28,6 +29,7 @@ export class WalletController {
   }
 
   @Get('balance')
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @ApiOperation({ summary: 'Get balance of authenticated user' })
   async getBalance(@CurrentUser() user: { userId: string })
   {
@@ -55,6 +57,7 @@ export class WalletController {
   }
 
   @Get('transactions')
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @ApiOperation({ summary: 'Get paginated transaction history' })
   async getTransactions(
     @CurrentUser() user: { userId: string },
@@ -64,6 +67,7 @@ export class WalletController {
   }
 
   @Get('transactions/:id')
+  @Header('Cache-Control', 'private, max-age=0, must-revalidate')
   @ApiOperation({ summary: 'Get transaction details by ID' })
   async getTransaction(
     @CurrentUser() user: { userId: string },

@@ -13,6 +13,7 @@ import {
   Req,
   Inject,
   Logger,
+  Header,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -154,6 +155,7 @@ export class CampaignsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=300')
   @ApiOperation({ summary: 'List campaigns (public + private where member)' })
   findAll(
     @Query() dto: ListCampaignsDto,
@@ -163,6 +165,7 @@ export class CampaignsController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'public, max-age=600')
   @ApiOperation({ summary: 'Get campaign details' })
   findOne(@Param('id') id: string, @CurrentUser() user: { userId: string }) {
     return this.campaignsService.findOne(id, user.userId);

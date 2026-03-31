@@ -1,7 +1,7 @@
 import {
   Controller, Get, Put, Delete,
   Param, Query, UseGuards,
-  HttpCode, HttpStatus,
+  HttpCode, HttpStatus, Header,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
@@ -54,6 +54,7 @@ export class NotificationsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'private, max-age=60')
   @ApiOperation({ summary: 'List notifications (paginated)' })
   findAll(
     @CurrentUser() user: { userId: string },
@@ -63,6 +64,7 @@ export class NotificationsController {
   }
 
   @Get('unread')
+  @Header('Cache-Control', 'private, max-age=60')
   @ApiOperation({ summary: 'List unread notifications' })
   findUnread(
     @CurrentUser() user: { userId: string },

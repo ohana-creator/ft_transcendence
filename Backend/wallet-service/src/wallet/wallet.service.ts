@@ -92,7 +92,10 @@ export class WalletService
     async getWalletByUserId(userId: string)
     {
         const wallet = await this.ensureWallet(userId);
-        return (wallet);
+        return {
+            ...wallet,
+            balance: wallet.balance.toString(),
+        };
     }
 
     async getBalance(userId: string)
@@ -239,6 +242,26 @@ export class WalletService
         const checkoutPath = configuredCheckoutPath.startsWith('/')
             ? configuredCheckoutPath
             : `/${configuredCheckoutPath}`;
+
+        if (provider === 'mock') {
+            // In local/dev the mock provider has no external webhook.
+            // Auto-confirm after a short delay so the wallet is actually credited.
+            setTimeout(() => {
+                void this.confirmTopup({
+                    userId,
+                    amount: dto.amount,
+                    reference,
+                    note: dto.note ?? `topup:checkout:${reference}:mock-auto-confirmed`,
+                })
+                    .then(() => {
+                        this.logger.log(`Mock checkout topup auto-confirmed for userId=${userId} ref=${reference}`);
+                    })
+                    .catch((error: unknown) => {
+                        const message = error instanceof Error ? error.message : String(error);
+                        this.logger.error(`Failed to auto-confirm mock topup ref=${reference}: ${message}`);
+                    });
+            }, 1500);
+        }
 
         return {
             status: 'PENDING',

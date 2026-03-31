@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -26,6 +27,7 @@ export class SocialController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('friends')
+  @Header('Cache-Control', 'private, max-age=60')
   @ApiOperation({ summary: 'List authenticated user friends' })
   async getFriends(@CurrentUser() user: { userId: string }) {
     return this.usersService.listFriends(user.userId);
@@ -42,6 +44,7 @@ export class SocialController {
   }
 
   @Get('friend-requests')
+  @Header('Cache-Control', 'private, max-age=60')
   @ApiOperation({ summary: 'List incoming/outgoing friend requests' })
   async listRequests(
     @CurrentUser() user: { userId: string },
@@ -109,6 +112,7 @@ export class SocialController {
   }
 
   @Get('friendship-status/:username')
+  @Header('Cache-Control', 'private, max-age=60')
   @ApiOperation({ summary: 'Get friendship status with target username' })
   async friendshipStatus(
     @CurrentUser() user: { userId: string },

@@ -12,6 +12,7 @@
 ## Índice
 
 - [Modelos de Dados](#modelos-de-dados)
+- [Fluxo Frontend de Topup](#fluxo-frontend-de-topup)
 - [Rotas Públicas (Autenticadas)](#rotas-públicas-autenticadas)
   - [Obter Carteira do Utilizador](#1-obter-carteira-do-utilizador)
   - [Obter Saldo](#2-obter-saldo)
@@ -25,6 +26,12 @@
 - [Enumerações](#enumerações)
 - [Exemplos de Resposta](#exemplos-de-resposta)
 - [Erros Comuns](#erros-comuns)
+
+## Fluxo Frontend de Topup
+
+Para padronizar UX, polling, logs e tratamento de estados (`PENDING`, `COMPLETED`, `FAILED`, `CANCELLED`) no frontend, consulte:
+
+- [wallet-topup-frontend.md](wallet-topup-frontend.md)
 
 ---
 
