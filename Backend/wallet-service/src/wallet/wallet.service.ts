@@ -146,7 +146,7 @@ export class WalletService
                 }
 
                 // 3. Debitar remetente
-                await tx.wallet.update({
+                const updatedFromWallet = await tx.wallet.update({
                 where: { id: fromWallet.id },
                 data: { balance: { decrement: amount } },
                 });
@@ -173,11 +173,6 @@ export class WalletService
                         toUsername,
                     },
                 },
-                });
-
-                // Buscar saldo atualizado do remetente
-                const updatedFromWallet = await tx.wallet.findUnique({
-                    where: { id: fromWallet.id },
                 });
 
                 return ({
@@ -286,7 +281,7 @@ export class WalletService
                 if (!wallet) throw new NotFoundException('WALLET_NOT_FOUND');
 
                 // 2. Creditar saldo
-                await tx.wallet.update({
+                const updatedWallet = await tx.wallet.update({
                     where: { id: wallet.id },
                     data: { balance: { increment: amount } },
                 });
@@ -301,11 +296,6 @@ export class WalletService
                         status: 'COMPLETED',
                         metadata: note ? { note } : undefined,
                     },
-                });
-
-                // 4. Buscar saldo atualizado após o incremento
-                const updatedWallet = await tx.wallet.findUnique({
-                    where: { id: wallet.id },
                 });
 
                 return ({
@@ -579,7 +569,7 @@ export class WalletService
                 }
 
                 // 3. Debitar utilizador
-                await tx.wallet.update({
+                const updatedUserWallet = await tx.wallet.update({
                     where: { id: userWallet.id },
                     data: { balance: { decrement: amount } },
                 });
@@ -600,11 +590,6 @@ export class WalletService
                         status: 'COMPLETED',
                         metadata: { campaignId, campaignTitle: campaignTitle ?? null },
                     },
-                });
-
-                // 6. Buscar saldo atualizado do usuário
-                const updatedUserWallet = await tx.wallet.findUnique({
-                    where: { id: userWallet.id },
                 });
 
                 return {
@@ -672,7 +657,7 @@ export class WalletService
             });
 
             // 4. Creditar utilizador
-            await tx.wallet.update({
+            const updatedUserWallet = await tx.wallet.update({
                 where: { id: userWallet.id },
                 data: { balance: { increment: amount } },
             });
@@ -691,11 +676,6 @@ export class WalletService
                         reason: 'saga_compensation',
                     },
                 },
-            });
-
-            // 6. Buscar saldo atualizado do usuário
-            const updatedUserWallet = await tx.wallet.findUnique({
-                where: { id: userWallet.id },
             });
 
             return {

@@ -186,6 +186,7 @@ export class AuthController {
     try {
       const { code, state, error } = req.query;
       console.log('Google callback received:', { code: !!code, state, error });
+      const authCode = Array.isArray(code) ? code[0] : code;
       
       if (error) {
         console.error('Google OAuth error:', error);
@@ -193,7 +194,7 @@ export class AuthController {
         return reply.redirect(`${frontendUrl}/auth/login?error=${error}`);
       }
 
-      if (!code) {
+      if (!authCode || typeof authCode !== 'string') {
         console.error('No code in Google callback');
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
         return reply.redirect(`${frontendUrl}/auth/login?error=no_code`);
@@ -201,7 +202,7 @@ export class AuthController {
 
       // Manual Google token exchange
       const googleConfig = this.secretsService.getGoogleConfig();
-      if (!googleConfig.clientId || !googleConfig.clientSecret) {
+      if (!googleConfig.clientId || !googleConfig.clientSecret || !googleConfig.callbackURL) {
         throw new Error('Google OAuth not configured');
       }
 
@@ -209,7 +210,7 @@ export class AuthController {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          code,
+          code: authCode,
           client_id: googleConfig.clientId,
           client_secret: googleConfig.clientSecret,
           redirect_uri: googleConfig.callbackURL,
