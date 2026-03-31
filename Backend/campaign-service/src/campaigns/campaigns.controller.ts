@@ -12,6 +12,7 @@ import {
   BadRequestException,
   Req,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
