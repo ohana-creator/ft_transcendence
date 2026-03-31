@@ -103,26 +103,41 @@ export class ProxyService {
     headers['x-correlation-id'] = correlationId;
 
     // Preparar body (se existir)
-    let body: Buffer | string | undefined;
+    let body: any;
+    const methodAllowsBody = req.method !== 'GET' && req.method !== 'HEAD';
+    const contentTypeHeader = req.headers['content-type'];
+    const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+    const isMultipart = typeof contentType === 'string' && contentType.includes('multipart/form-data');
 
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body !== undefined) {
-      if (Buffer.isBuffer(req.body)) {
-        body = req.body;
-      } else if (typeof req.body === 'object') {
-        body = JSON.stringify(req.body);
-        headers['content-type'] = 'application/json';
-      } else if (typeof req.body === 'string') {
-        body = req.body;
+    if (methodAllowsBody) {
+      if (req.body !== undefined) {
+        if (Buffer.isBuffer(req.body)) {
+          body = req.body;
+        } else if (typeof req.body === 'object') {
+          body = JSON.stringify(req.body);
+          headers['content-type'] = 'application/json';
+        } else if (typeof req.body === 'string') {
+          body = req.body;
+        }
+      } else if (isMultipart) {
+        // Preserve raw multipart stream when the body is not pre-parsed by Fastify.
+        body = req.raw;
       }
     }
 
     try {
-      const response = await fetch(targetUrl, {
+      const requestInit: RequestInit & { duplex?: 'half' } = {
         method: req.method,
         headers,
         body,
         redirect: 'manual',
-      } as RequestInit);
+      };
+
+      if (body === req.raw) {
+        requestInit.duplex = 'half';
+      }
+
+      const response = await fetch(targetUrl, requestInit);
 
       // Copiar status code
       reply.status(response.status);
