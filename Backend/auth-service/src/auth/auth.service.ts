@@ -63,6 +63,28 @@ export class AuthService {
     };
   }
 
+  private buildAuthSuccessResponse(user: {
+    id: string;
+    email: string;
+    username: string;
+    authProvider: string;
+  }, token: string) {
+    const safeUser = this.sanitizeUser(user);
+
+    // Keep both top-level and nested fields for frontend compatibility.
+    return {
+      success: true,
+      accessToken: token,
+      token,
+      user: safeUser,
+      data: {
+        user: safeUser,
+        accessToken: token,
+        token,
+      },
+    };
+  }
+
   // ── Register ─────────────────────────────────────────────
 
   async register(data: RegisterDto) {
@@ -91,13 +113,7 @@ export class AuthService {
 
       this.logger.log(`User registered: ${user.email}`);
 
-      return {
-        success: true,
-        data: {
-          user: this.sanitizeUser(user),
-          accessToken: token,
-        },
-      };
+      return this.buildAuthSuccessResponse(user, token);
     } catch (error: unknown) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -143,13 +159,7 @@ export class AuthService {
 
     this.logger.log(`User logged in: ${user.email}`);
 
-    return {
-      success: true,
-      data: {
-        user: this.sanitizeUser(user),
-        accessToken: token,
-      },
-    };
+    return this.buildAuthSuccessResponse(user, token);
   }
 
   // ── Logout (blacklist the token) ─────────────────────────
@@ -335,13 +345,7 @@ export class AuthService {
 
     this.logger.log(`2FA login completed for user ${user.email}`);
 
-    return {
-      success: true,
-      data: {
-        user: this.sanitizeUser(user),
-        accessToken: token,
-      },
-    };
+    return this.buildAuthSuccessResponse(user, token);
   }
 
   // ── Google OAuth ─────────────────────────────────────────

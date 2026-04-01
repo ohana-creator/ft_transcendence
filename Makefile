@@ -5,7 +5,7 @@
 # Uso: make <comando>
 # ============================================
 
-.PHONY: help up down restart logs clean clean-all db-up db-down db-reset \
+.PHONY: help up down restart logs clean clean-all db-up db-down db-reset nuclear \
         status build rebuild migrate push-schema \
         logs-api logs-auth logs-user logs-campaign logs-ledger logs-wallet logs-notification \
         shell-api shell-auth shell-user shell-campaign shell-ledger shell-wallet shell-notification \
@@ -49,6 +49,8 @@ help: ## Mostra esta ajuda
 	@echo "$(GREEN)🧹 LIMPEZA:$(NC)"
 	@echo "  make clean           - Para containers e remove volumes"
 	@echo "  make clean-all       - Limpeza completa (containers, volumes, imagens)"
+	@echo "  make reset           - 💥 RESET TOTAL (apaga tudo e reconstrói)"
+	@echo "  make nuclear         - ☢️  NUCLEAR (reset + limpa cache Node/Docker)"
 	@echo ""
 	@echo "$(GREEN)🔨 BUILD:$(NC)"
 	@echo "  make build           - Builda todas as imagens"
@@ -126,19 +128,45 @@ db-status: ## Status dos bancos de dados
 	@echo "$(BLUE)🗄️  Status dos bancos:$(NC)"
 	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(Db|redis)" || echo "Nenhum banco rodando"
 
-db-reset: ## Limpa e reinicia todos os bancos (CUIDADO: apaga dados!)
-	@echo "$(RED)⚠️  ATENÇÃO: Isso vai APAGAR todos os dados!$(NC)"
-	@echo "$(YELLOW)Parando serviços...$(NC)"
-	@$(COMPOSE) down -v
-	@echo "$(YELLOW)Removendo volumes de banco...$(NC)"
-	@docker volume ls -q | grep -E "(auth|user|campaign|ledger|wallet|notification)" | xargs -r docker volume rm 2>/dev/null || true
-	@echo "$(GREEN)🗄️  Reiniciando bancos limpos...$(NC)"
-	@$(COMPOSE) up -d redis authDb userDb campaignDb ledgerDb walletDb notificationDb
-	@echo "$(YELLOW)⏱️  Aguardando bancos ficarem healthy...$(NC)"
-	@sleep 15
-	@echo "$(GREEN)🚀 Iniciando serviços...$(NC)"
-	@$(COMPOSE) up -d
-	@echo "$(GREEN)✅ Reset completo! Bancos limpos e serviços rodando.$(NC)"
+db-reset: ## 💥 RESET TOTAL - apaga TUDO (containers, volumes, imagens, cache)
+	@echo "$(RED)💥 ATENÇÃO: RESET TOTAL - Isso vai APAGAR ABSOLUTAMENTE TUDO!$(NC)"
+	@echo "$(RED)   - Todos os containers$(NC)"
+	@echo "$(RED)   - Todos os volumes e dados$(NC)"  
+	@echo "$(RED)   - Todas as imagens do projeto$(NC)"
+	@echo "$(RED)   - Cache do Docker$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Aguarde 5 segundos para cancelar (Ctrl+C)...$(NC)"
+	@sleep 5
+	@echo ""
+	@echo "$(RED)🛑 Parando TODOS os containers...$(NC)"
+	@$(COMPOSE) down --remove-orphans
+	@echo "$(RED)🗑️  Removendo TODOS os containers do projeto...$(NC)"
+	@docker container prune -f
+	@echo "$(RED)📁 Removendo TODOS os volumes (dados perdidos para sempre)...$(NC)"
+	@$(COMPOSE) down -v --remove-orphans
+	@docker volume ls -q | grep -E "(ft-transcendence|auth|user|campaign|ledger|wallet|notification|redis)" | xargs -r docker volume rm -f 2>/dev/null || true
+	@docker volume prune -f
+	@echo "$(RED)🖼️  Removendo imagens do projeto...$(NC)"
+	@docker images --format "table {{.Repository}}:{{.Tag}}\t{{.ID}}" | grep -E "(auth-service|user-service|campaign-service|ledger-service|wallet-service|notification-service|api-gateway)" | awk '{print $$2}' | xargs -r docker rmi -f 2>/dev/null || true
+	@echo "$(RED)🧹 Limpando cache do Docker...$(NC)"
+	@docker system prune -f
+	@echo ""
+	@echo "$(GREEN)✨ Reconstruindo TUDO do zero...$(NC)"
+	@echo "$(YELLOW)1. Subindo bancos de dados limpos...$(NC)"
+	@$(COMPOSE) up -d redis authDb userDb campaignDb ledgerDb walletDb notificationDb --build
+	@echo "$(YELLOW)2. Aguardando bancos ficarem healthy (20s)...$(NC)"
+	@sleep 20
+	@echo "$(YELLOW)3. Buildando e iniciando TODOS os serviços...$(NC)"
+	@$(COMPOSE) up -d --build
+	@echo "$(YELLOW)4. Aguardando serviços iniciarem (30s)...$(NC)"
+	@sleep 30
+	@echo ""
+	@echo "$(GREEN)✅ 💥 RESET TOTAL COMPLETO! 💥$(NC)"
+	@echo "$(GREEN)   🎉 Sistema completamente limpo e reconstruído!$(NC)"
+	@echo "$(GREEN)   🗄️  Bancos vazios e schemas aplicados$(NC)"
+	@echo "$(GREEN)   🚀 Todos os serviços rodando com código atualizado$(NC)"
+	@echo ""
+	@make status
 
 push-schema: ## Aplica schemas Prisma em todos os serviços (db push)
 	@echo "$(GREEN)📋 Aplicando schemas Prisma...$(NC)"
@@ -279,3 +307,42 @@ test-endpoints: ## Testa endpoints principais
 	@echo ""
 	@echo "$(GREEN)✅ Testes concluídos!$(NC)"
 	@echo "$(YELLOW)Nota: 401 = endpoint existe mas requer autenticação$(NC)"
+
+# ============================================
+# RESET NUCLEAR (quando reset normal falha)
+# ============================================
+
+nuclear: ## ☢️  RESET NUCLEAR - apaga TUDO + cache Node/Docker (último recurso)
+	@echo "$(RED)☢️  ☢️  ☢️  RESET NUCLEAR ☢️  ☢️  ☢️$(NC)"
+	@echo "$(RED)ISSO VAI APAGAR ABSOLUTAMENTE TUDO + CACHE:$(NC)"
+	@echo "$(RED)   💀 Todos os containers Docker$(NC)"
+	@echo "$(RED)   💀 Todos os volumes e dados$(NC)"  
+	@echo "$(RED)   💀 Todas as imagens Docker$(NC)"
+	@echo "$(RED)   💀 Todo o cache do Docker$(NC)"
+	@echo "$(RED)   💀 Cache node_modules$(NC)"
+	@echo "$(RED)   💀 Arquivos .next, dist, build$(NC)"
+	@echo ""
+	@echo "$(YELLOW)⏰ 10 segundos para cancelar (Ctrl+C)...$(NC)"
+	@sleep 10
+	@echo ""
+	@echo "$(RED)💀 INICIANDO RESET NUCLEAR...$(NC)"
+	@echo "$(RED)🛑 Parando TODO o Docker...$(NC)"
+	@docker stop $$(docker ps -aq) 2>/dev/null || true
+	@docker system prune -a -f --volumes
+	@echo "$(RED)🗑️  Removendo cache local...$(NC)"
+	@find . -name "node_modules" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "dist" -type d -exec rm -rf {} + 2>/dev/null || true  
+	@find . -name ".next" -type d -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "build" -type d -exec rm -rf {} + 2>/dev/null || true
+	@echo "$(RED)🧹 Limpeza Docker completa...$(NC)"
+	@docker system df
+	@echo ""
+	@echo "$(GREEN)✨ Reconstruindo universo do zero...$(NC)"
+	@echo "$(YELLOW)Isso vai demorar... Buildando tudo novamente...$(NC)"
+	@$(COMPOSE) up -d --build --force-recreate
+	@echo "$(YELLOW)⏱️  Aguardando sistema estabilizar (60s)...$(NC)"
+	@sleep 60
+	@echo ""
+	@echo "$(GREEN)✅ ☢️  RESET NUCLEAR COMPLETO! ☢️$(NC)"
+	@echo "$(GREEN)🎉 Sistema totalmente reconstruído do zero!$(NC)"
+	@make status

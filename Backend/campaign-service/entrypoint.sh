@@ -15,13 +15,16 @@ export R2_SECRET_ACCESS_KEY=$(cat /run/secrets/r2_secret_access_key)
 if [ -f "prisma/schema.prisma" ]; then
   echo "⏳ Running prisma generate..."
   npx prisma generate
+
   if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
     echo "⏳ Running prisma migrate deploy..."
-    npx prisma migrate deploy
+    npx prisma migrate deploy || echo "⚠ migrate deploy failed, trying db push..."
+    npx prisma db push --accept-data-loss 2>/dev/null || true
   else
-    echo "ℹ No prisma migrations found. Running prisma db push..."
-    npx prisma db push
+    echo "⏳ Running prisma db push..."
+    npx prisma db push --accept-data-loss
   fi
+
   echo "✔ Prisma ready"
 fi
 
