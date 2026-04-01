@@ -1,0 +1,72 @@
+generator client {
+  provider     = "prisma-client-js"
+  output       = "../node_modules/.prisma/client"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  avatarUrl String?
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outgoingFriendRequests FriendRequest[] @relation("OutgoingFriendRequests")
+  incomingFriendRequests FriendRequest[] @relation("IncomingFriendRequests")
+  friendshipsAsA         Friendship[]    @relation("FriendshipsAsA")
+  friendshipsAsB         Friendship[]    @relation("FriendshipsAsB")
+  blocksMade             Block[]         @relation("BlocksMade")
+  blocksReceived         Block[]         @relation("BlocksReceived")
+}
+
+model FriendRequest {
+  id           String              @id @default(uuid())
+  fromUserId   String
+  toUserId     String
+  status       FriendRequestStatus @default(PENDING)
+  createdAt    DateTime            @default(now())
+  respondedAt  DateTime?
+  fromUser     User                @relation("OutgoingFriendRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser       User                @relation("IncomingFriendRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, status])
+  @@index([fromUserId, status])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+  userA     User     @relation("FriendshipsAsA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipsAsB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model Block {
+  id            String   @id @default(uuid())
+  blockerUserId String
+  blockedUserId String
+  createdAt     DateTime @default(now())
+  blocker       User     @relation("BlocksMade", fields: [blockerUserId], references: [id], onDelete: Cascade)
+  blocked       User     @relation("BlocksReceived", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerUserId, blockedUserId])
+  @@index([blockedUserId])
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+}

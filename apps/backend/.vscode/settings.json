@@ -1,0 +1,4 @@
+{
+    "inlineChat.defaultModel": "Claude Opus 4.5 (copilotcli)",
+    "github.copilot.chat.claudeAgent.enabled": false
+}

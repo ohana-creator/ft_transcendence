@@ -1,0 +1,36 @@
+generator client {
+  provider     = "prisma-client-js"
+  output       = "../node_modules/.prisma/client"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  metadata  Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  CAMPAIGN_CONTRIBUTION
+  CAMPAIGN_INVITE
+  WALLET_TRANSFER_SENT
+  WALLET_TRANSFER_RECEIVED
+  CAMPAIGN_GOAL_REACHED
+  CAMPAIGN_CLOSED
+  MEMBER_PROMOTED
+  TWO_FA_EMAIL_CODE_SENT
+  TWO_FA_SETUP_EMAIL_CODE
+  TWO_FA_DISABLE_EMAIL_CODE
+}
