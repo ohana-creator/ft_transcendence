@@ -1,0 +1,3 @@
+// Pessoa 1 – Dashboard components
+// VaquinhasOverview, SaldoTotal, NotificacoesDash...
+export { default as OperacoesFrequentes } from './operacoes-frequentes';
