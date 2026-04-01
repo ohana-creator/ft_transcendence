@@ -36,6 +36,9 @@ async function bootstrap() {
   const staticConfig = {
     root: staticRoot,
     prefix: '/uploads/',
+    cacheControl: true,
+    maxAge: 31536000000,
+    immutable: true,
   };
   console.log('[CAMPAIGN SERVICE] Configurando fastify-static:', staticConfig);
   

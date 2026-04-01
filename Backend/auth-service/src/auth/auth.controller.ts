@@ -25,6 +25,11 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { TwoFACodeDto } from './dto/two-fa-code.dto';
 import { TwoFAValidateDto } from './dto/two-fa-validate.dto';
+import {
+  Request2FAEmailDto,
+  Validate2FAEmailDto,
+  Enable2FAEmailDto,
+} from './dto/two-fa-email.dto';
 import { JwtGuard } from './guards/jwt-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -442,5 +447,97 @@ export class AuthController {
     });
 
     return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+  }
+
+  // ── 2FA Email: Request Code (No Auth) ─────────────────
+
+  @Post('2fa/email/request')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
+  @ApiOperation({
+    summary: 'Request 2FA email code during login (after email+password)',
+  })
+  @ApiResponse({ status: 200, description: 'Code sent to email' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiBody({ type: Request2FAEmailDto })
+  async request2FAEmail(@Body() body: Request2FAEmailDto) {
+    const identifier = body.email ?? body.identifier;
+    if (!identifier) {
+      throw new BadRequestException('email or identifier is required');
+    }
+    return this.authService.request2FAEmail(identifier);
+  }
+
+  // ── 2FA Email: Validate during Login ──────────────────
+
+  @Post('2fa/email/validate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @ApiOperation({ summary: 'Validate 2FA email code to complete login' })
+  @ApiResponse({ status: 200, description: 'Login completed with 2FA' })
+  @ApiResponse({ status: 401, description: 'Invalid code or expired token' })
+  @ApiResponse({ status: 429, description: 'Too many attempts' })
+  @ApiBody({ type: Validate2FAEmailDto })
+  async validate2FAEmail(@Body() body: Validate2FAEmailDto) {
+    return this.authService.validate2FAEmailLogin(body.tempToken, body.code);
+  }
+
+  // ── 2FA Email: Enable (Authenticated User) ───────────
+
+  @Post('2fa/email/enable')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Enable 2FA via email for current user account',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Confirmation code sent to email',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async enable2FAEmail(@CurrentUser() user: { userId: string }) {
+    return this.authService.enable2FAEmail(user.userId);
+  }
+
+  // ── 2FA Email: Confirm Enable ────────────────────────
+
+  @Post('2fa/email/confirm')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm 2FA email setup with received code' })
+  @ApiResponse({ status: 200, description: '2FA enabled successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired code' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBody({ type: Enable2FAEmailDto })
+  async confirm2FAEmail(
+    @CurrentUser() user: { userId: string },
+    @Body() body: Enable2FAEmailDto,
+  ) {
+    return this.authService.confirm2FAEmail(user.userId, body.code);
+  }
+
+  // ── 2FA Email: Disable (Authenticated User) ──────────
+
+  @Post('2fa/email/disable')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
+  @ApiOperation({ summary: 'Disable 2FA email (requires code confirmation)' })
+  @ApiResponse({ status: 200, description: '2FA disabled or code sent' })
+  @ApiResponse({ status: 401, description: 'Invalid code or unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiBody({ type: Enable2FAEmailDto, required: false })
+  async disable2FAEmail(
+    @CurrentUser() user: { userId: string },
+    @Body() body?: Enable2FAEmailDto,
+  ) {
+    return this.authService.disable2FAEmail(user.userId, body?.code || '');
   }
 }

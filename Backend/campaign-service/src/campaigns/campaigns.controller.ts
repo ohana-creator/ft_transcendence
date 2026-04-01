@@ -13,6 +13,7 @@ import {
   Req,
   Inject,
   Logger,
+  Header,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -154,6 +155,7 @@ export class CampaignsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=300')
   @ApiOperation({ summary: 'List campaigns (public + private where member)' })
   findAll(
     @Query() dto: ListCampaignsDto,
@@ -163,6 +165,7 @@ export class CampaignsController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'public, max-age=600')
   @ApiOperation({ summary: 'Get campaign details' })
   findOne(@Param('id') id: string, @CurrentUser() user: { userId: string }) {
     return this.campaignsService.findOne(id, user.userId);
@@ -257,15 +260,24 @@ export class CampaignsController {
 export class InvitationsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
+  @Get('pending')
+  @ApiOperation({ summary: 'Get pending invitations for current user' })
+  getPendingInvitations(
+    @CurrentUser() user: { userId: string; email: string; username: string },
+  ) {
+    return this.campaignsService.getPendingInvitations(user.userId, user.email);
+  }
+
   @Post(':id/accept')
   @ApiOperation({ summary: 'Accept invitation' })
   accept(
     @Param('id') id: string,
-    @CurrentUser() user: { userId: string; username: string },
+    @CurrentUser() user: { userId: string; email: string; username: string },
   ) {
     return this.campaignsService.respondInvitation(
       id,
       user.userId,
+      user.email,
       user.username,
       true,
     );
@@ -275,11 +287,12 @@ export class InvitationsController {
   @ApiOperation({ summary: 'Reject invitation' })
   reject(
     @Param('id') id: string,
-    @CurrentUser() user: { userId: string; username: string },
+    @CurrentUser() user: { userId: string; email: string; username: string },
   ) {
     return this.campaignsService.respondInvitation(
       id,
       user.userId,
+      user.email,
       user.username,
       false,
     );

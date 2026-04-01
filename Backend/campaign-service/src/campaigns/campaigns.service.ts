@@ -378,10 +378,38 @@ export class CampaignsService {
     return this.prisma.invitation.findMany({ where: { campaignId } });
   }
 
-  async respondInvitation(invitationId: string, userId: string, username: string, accept: boolean) {
+  async getPendingInvitations(userId: string, email: string) {
+    return this.prisma.invitation.findMany({
+      where: {
+        status: 'PENDING',
+        OR: [
+          { invitedUserId: userId },
+          { invitedEmail: email }
+        ]
+      },
+      include: {
+        campaign: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            ownerUsername: true,
+            isPrivate: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async respondInvitation(invitationId: string, userId: string, email: string, username: string, accept: boolean) {
     const invitation = await this.prisma.invitation.findUnique({ where: { id: invitationId } });
     if (!invitation) throw new NotFoundException('Invitation not found');
-    if (invitation.invitedUserId !== userId) throw new ForbiddenException('Not your invitation');
+    
+    // Check if invitation is for this user (by ID OR email)
+    const isUserInvitation = invitation.invitedUserId === userId || invitation.invitedEmail === email;
+    if (!isUserInvitation) throw new ForbiddenException('Not your invitation');
+    
     if (invitation.status !== 'PENDING') throw new BadRequestException('Invitation already responded');
 
     if (accept) {

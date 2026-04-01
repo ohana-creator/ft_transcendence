@@ -3,6 +3,7 @@ import {
   Param, Query, Body, Req,
   HttpCode, HttpStatus, UseGuards,
   ForbiddenException, BadRequestException,
+  Header,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -23,6 +24,7 @@ export class UsersController {
   ) {}
 
   @Get('search')
+  @Header('Cache-Control', 'public, max-age=300')
   @ApiOperation({ summary: 'Search users by username or email' })
   search(@Query() dto: SearchUsersDto) {
     return this.usersService.search(dto);
@@ -71,6 +73,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @Header('Cache-Control', 'public, max-age=600')
   @ApiOperation({ summary: 'Get public user profile' })
   findOne(@Param('id') id: string) {
     return this.usersService.findById(id);

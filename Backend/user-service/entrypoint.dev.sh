@@ -19,13 +19,7 @@ if [ -f "prisma/schema.prisma" ]; then
   echo "⏳ Running prisma generate..."
   npx prisma generate
   echo "⏳ Running prisma migrate deploy..."
-  if [ ! -d "prisma/migrations" ]; then
-    echo "⏳ Running prisma migrate dev --name init..."
-    npx prisma migrate dev --name init
-  else
-    echo "⏳ Running prisma migrate deploy..."
-    npx prisma migrate deploy
-  fi
+  npx prisma migrate deploy
   echo "✔ Prisma ready"
 fi
 
