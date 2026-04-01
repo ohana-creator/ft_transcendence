@@ -260,15 +260,24 @@ export class CampaignsController {
 export class InvitationsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
+  @Get('pending')
+  @ApiOperation({ summary: 'Get pending invitations for current user' })
+  getPendingInvitations(
+    @CurrentUser() user: { userId: string; email: string; username: string },
+  ) {
+    return this.campaignsService.getPendingInvitations(user.userId, user.email);
+  }
+
   @Post(':id/accept')
   @ApiOperation({ summary: 'Accept invitation' })
   accept(
     @Param('id') id: string,
-    @CurrentUser() user: { userId: string; username: string },
+    @CurrentUser() user: { userId: string; email: string; username: string },
   ) {
     return this.campaignsService.respondInvitation(
       id,
       user.userId,
+      user.email,
       user.username,
       true,
     );
@@ -278,11 +287,12 @@ export class InvitationsController {
   @ApiOperation({ summary: 'Reject invitation' })
   reject(
     @Param('id') id: string,
-    @CurrentUser() user: { userId: string; username: string },
+    @CurrentUser() user: { userId: string; email: string; username: string },
   ) {
     return this.campaignsService.respondInvitation(
       id,
       user.userId,
+      user.email,
       user.username,
       false,
     );

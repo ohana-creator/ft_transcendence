@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { EmailService } from '../notifications/email.service.js';
 
 type EventHandler = (payload: any) => Promise<void>;
 
@@ -21,6 +22,7 @@ export class EventConsumerService implements OnModuleInit, OnModuleDestroy
     constructor(
         private readonly redis: RedisService,
         private readonly notificationsService: NotificationsService,
+        private readonly emailService: EmailService,
     ) {}
 
     async onModuleInit()
@@ -139,6 +141,78 @@ export class EventConsumerService implements OnModuleInit, OnModuleDestroy
                 },
             });
             this.logger.debug('Notifications created for transfer.completed');
+        });
+
+        // Auth events — 2FA email code generation
+        this.on('auth-events', '2fa.email.code-generated', async (payload) => {
+            // Send email with 2FA code
+            await this.emailService.send2FACode(
+                payload.email,
+                payload.username,
+                payload.code,
+            );
+
+            try {
+                await this.notificationsService.create({
+                    userId: payload.userId,
+                    type: 'TWO_FA_EMAIL_CODE_SENT',
+                    title: '2FA Code Sent',
+                    message: `A 2-factor authentication code has been sent to your email.`,
+                    metadata: {},
+                });
+            } catch (error) {
+                this.logger.warn(`Failed to create in-app notification for 2FA code: ${String(error)}`);
+            }
+            
+            this.logger.debug('Notification and email created for 2fa.email.code-generated');
+        });
+
+        // Auth events — 2FA setup code
+        this.on('auth-events', '2fa.email.setup-code-generated', async (payload) => {
+            // Send email with setup code
+            await this.emailService.send2FASetupCode(
+                payload.email,
+                payload.username,
+                payload.code,
+            );
+
+            try {
+                await this.notificationsService.create({
+                    userId: payload.userId,
+                    type: 'TWO_FA_SETUP_EMAIL_CODE',
+                    title: '2FA Setup Code Sent',
+                    message: `Enter the code from your email to complete 2FA setup.`,
+                    metadata: {},
+                });
+            } catch (error) {
+                this.logger.warn(`Failed to create in-app notification for 2FA setup code: ${String(error)}`);
+            }
+            
+            this.logger.debug('Notification and email created for 2fa.email.setup-code-generated');
+        });
+
+        // Auth events — 2FA disable code
+        this.on('auth-events', '2fa.email.disable-code-generated', async (payload) => {
+            // Send email with disable code
+            await this.emailService.send2FADisableCode(
+                payload.email,
+                payload.username,
+                payload.code,
+            );
+
+            try {
+                await this.notificationsService.create({
+                    userId: payload.userId,
+                    type: 'TWO_FA_DISABLE_EMAIL_CODE',
+                    title: '2FA Disable Code Sent',
+                    message: `Enter the code from your email to disable 2FA on your account.`,
+                    metadata: {},
+                });
+            } catch (error) {
+                this.logger.warn(`Failed to create in-app notification for 2FA disable code: ${String(error)}`);
+            }
+            
+            this.logger.debug('Notification and email created for 2fa.email.disable-code-generated');
         });
     }
 

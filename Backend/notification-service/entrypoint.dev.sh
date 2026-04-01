@@ -16,9 +16,14 @@ fi
 if [ -f "prisma/schema.prisma" ]; then
   echo "⏳ Running prisma generate..."
   npx prisma generate
-  echo "⏳ Running prisma migrate deploy..."
-  if ! npx prisma migrate deploy; then
-    echo "⚠ prisma migrate deploy failed; continuing startup with existing schema"
+  if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+    echo "⏳ Running prisma migrate deploy..."
+    if ! npx prisma migrate deploy; then
+      echo "⚠ prisma migrate deploy failed; continuing startup with existing schema"
+    fi
+  else
+    echo "ℹ No prisma migrations found. Running prisma db push..."
+    npx prisma db push
   fi
   echo "✔ Prisma ready"
 fi

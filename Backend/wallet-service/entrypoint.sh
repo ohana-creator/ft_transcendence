@@ -20,7 +20,8 @@ if [ -f "prisma/schema.prisma" ]; then
     echo "⏳ Running prisma migrate deploy..."
     npx prisma migrate deploy
   else
-    echo "ℹ No prisma migrations found. Skipping prisma migrate deploy."
+    echo "ℹ No prisma migrations found. Running prisma db push..."
+    npx prisma db push
   fi
   echo "✔ Prisma ready"
 fi
