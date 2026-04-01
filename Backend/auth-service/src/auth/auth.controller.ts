@@ -64,11 +64,34 @@ export class AuthController {
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Login with email/username and password' })
   @ApiResponse({ status: 200, description: 'Login successful or 2FA required' })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing identifier/email or password',
+  })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  @ApiResponse({ status: 429, description: 'Too many attempts — try again later' })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many attempts — try again later',
+  })
   @ApiBody({ type: LoginDto })
-  async login(@Body() data: LoginDto) {
-    return this.authService.login(data);
+  async login(
+    @Body()
+    data: {
+      identifier?: string;
+      email?: string;
+      password?: string;
+    },
+  ) {
+    const identifier = data.identifier ?? data.email;
+    const password = data.password;
+
+    if (!identifier || !password) {
+      throw new BadRequestException(
+        'identifier/email and password are required',
+      );
+    }
+
+    return this.authService.login({ identifier, password });
   }
 
   // ── Logout ─────────────────────────────────────────────
@@ -188,24 +211,24 @@ export class AuthController {
   @Get('google/callback')
   @ApiOperation({ summary: 'Google OAuth callback — exchanges code for token' })
   async googleCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    
     try {
       const { code, state, error } = req.query;
       const authCode = Array.isArray(code) ? code[0] : code;
       
       if (error) {
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        return reply.redirect(`${frontendUrl}/auth/login?error=${error}`);
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=${error}`);
       }
 
       if (!authCode || typeof authCode !== 'string') {
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-        return reply.redirect(`${frontendUrl}/auth/login?error=no_code`);
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=no_code`);
       }
 
       // Manual Google token exchange
       const googleConfig = this.secretsService.getGoogleConfig();
       if (!googleConfig.clientId || !googleConfig.clientSecret || !googleConfig.callbackURL) {
-        throw new Error('Google OAuth not configured');
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=oauth_config`);
       }
 
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -221,12 +244,12 @@ export class AuthController {
       });
 
       if (!tokenResponse.ok) {
-        throw new Error('Token exchange failed');
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=token_exchange`);
       }
 
       const tokenData = await tokenResponse.json();
       if (!tokenData.access_token) {
-        throw new Error('No access token received');
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=no_token`);
       }
 
       // Get user profile from Google
@@ -235,7 +258,7 @@ export class AuthController {
       });
 
       if (!profileResponse.ok) {
-        throw new Error('Failed to fetch Google profile');
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=profile_fetch`);
       }
 
       const profile = await profileResponse.json();
@@ -247,11 +270,9 @@ export class AuthController {
         displayName: profile.name,
       });
 
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-      return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
-    } catch {
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-      return reply.redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
+      return reply.code(302).redirect(`${frontendUrl}/auth/callback?token=${token}`);
+    } catch (err) {
+      return reply.code(302).redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
     }
   }
 
@@ -284,68 +305,70 @@ export class AuthController {
   @Get('42/callback')
   @ApiOperation({ summary: '42 OAuth callback — exchanges code for token' })
   async fortyTwoCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
-    const fortyTwoConfig = this.secretsService.getFortyTwoConfig();
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    
+    try {
+      const fortyTwoConfig = this.secretsService.getFortyTwoConfig();
 
-    if (!fortyTwoConfig.clientId || !fortyTwoConfig.clientSecret || !fortyTwoConfig.callbackURL) {
-      return reply.status(403).send({
-        statusCode: 403,
-        message: '42 OAuth not configured',
+      if (!fortyTwoConfig.clientId || !fortyTwoConfig.clientSecret || !fortyTwoConfig.callbackURL) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=oauth_config`);
+      }
+
+      const code = req.query?.code;
+      if (!code || typeof code !== 'string') {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=no_code`);
+      }
+
+      const tokenBody = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: fortyTwoConfig.clientId,
+        client_secret: fortyTwoConfig.clientSecret,
+        code,
+        redirect_uri: fortyTwoConfig.callbackURL,
       });
+
+      const tokenResp = await fetch('https://api.intra.42.fr/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenBody,
+      });
+
+      if (!tokenResp.ok) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=token_exchange`);
+      }
+
+      const tokenData = (await tokenResp.json()) as { access_token?: string };
+      if (!tokenData.access_token) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=no_token`);
+      }
+
+      const meResp = await fetch('https://api.intra.42.fr/v2/me', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+
+      if (!meResp.ok) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=profile_fetch`);
+      }
+
+      const me = (await meResp.json()) as {
+        email?: string;
+        displayname?: string;
+        login?: string;
+        id?: number;
+      };
+
+      const email = me.email || '';
+      const displayName = me.displayname || me.login || 'forty_two_user';
+
+      const { token } = await this.authService.handleFortyTwoUser({
+        email,
+        displayName,
+      });
+
+      return reply.code(302).redirect(`${frontendUrl}/auth/callback?token=${token}`);
+    } catch (err) {
+      return reply.code(302).redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
     }
-
-    const code = req.query?.code;
-    if (!code || typeof code !== 'string') {
-      throw new BadRequestException('Missing OAuth code for 42 callback');
-    }
-
-    const tokenBody = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: fortyTwoConfig.clientId,
-      client_secret: fortyTwoConfig.clientSecret,
-      code,
-      redirect_uri: fortyTwoConfig.callbackURL,
-    });
-
-    const tokenResp = await fetch('https://api.intra.42.fr/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: tokenBody,
-    });
-
-    if (!tokenResp.ok) {
-      throw new UnauthorizedException('Failed to exchange 42 OAuth code');
-    }
-
-    const tokenData = (await tokenResp.json()) as { access_token?: string };
-    if (!tokenData.access_token) {
-      throw new UnauthorizedException('42 OAuth token missing access_token');
-    }
-
-    const meResp = await fetch('https://api.intra.42.fr/v2/me', {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
-
-    if (!meResp.ok) {
-      throw new UnauthorizedException('Failed to fetch 42 profile');
-    }
-
-    const me = (await meResp.json()) as {
-      email?: string;
-      displayname?: string;
-      login?: string;
-      id?: number;
-    };
-
-    const email = me.email || '';
-    const displayName = me.displayname || me.login || 'forty_two_user';
-
-    const { token } = await this.authService.handleFortyTwoUser({
-      email,
-      displayName,
-    });
-
-    return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
   }
 
   // ── Facebook OAuth ─────────────────────────────────────
@@ -377,61 +400,63 @@ export class AuthController {
   @Get('facebook/callback')
   @ApiOperation({ summary: 'Facebook OAuth callback — exchanges code for token' })
   async facebookCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
-    const facebookConfig = this.secretsService.getFacebookConfig();
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    
+    try {
+      const facebookConfig = this.secretsService.getFacebookConfig();
 
-    if (!facebookConfig.clientId || !facebookConfig.clientSecret || !facebookConfig.callbackURL) {
-      return reply.status(403).send({
-        statusCode: 403,
-        message: 'Facebook OAuth not configured',
+      if (!facebookConfig.clientId || !facebookConfig.clientSecret || !facebookConfig.callbackURL) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=oauth_config`);
+      }
+
+      const code = req.query?.code;
+      if (!code || typeof code !== 'string') {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=no_code`);
+      }
+
+      const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+      tokenUrl.searchParams.append('client_id', facebookConfig.clientId);
+      tokenUrl.searchParams.append('client_secret', facebookConfig.clientSecret);
+      tokenUrl.searchParams.append('redirect_uri', facebookConfig.callbackURL);
+      tokenUrl.searchParams.append('code', code);
+
+      const tokenResp = await fetch(tokenUrl.toString());
+      if (!tokenResp.ok) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=token_exchange`);
+      }
+
+      const tokenData = (await tokenResp.json()) as { access_token?: string };
+      if (!tokenData.access_token) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=no_token`);
+      }
+
+      const meUrl = new URL('https://graph.facebook.com/me');
+      meUrl.searchParams.append('fields', 'id,name,email');
+      meUrl.searchParams.append('access_token', tokenData.access_token);
+
+      const meResp = await fetch(meUrl.toString());
+      if (!meResp.ok) {
+        return reply.code(302).redirect(`${frontendUrl}/auth/login?error=profile_fetch`);
+      }
+
+      const me = (await meResp.json()) as {
+        email?: string;
+        name?: string;
+        id?: string;
+      };
+
+      const email = me.email || '';
+      const displayName = me.name || 'facebook_user';
+
+      const { token } = await this.authService.handleFacebookUser({
+        email,
+        displayName,
       });
+
+      return reply.code(302).redirect(`${frontendUrl}/auth/callback?token=${token}`);
+    } catch (err) {
+      return reply.code(302).redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
     }
-
-    const code = req.query?.code;
-    if (!code || typeof code !== 'string') {
-      throw new BadRequestException('Missing OAuth code for Facebook callback');
-    }
-
-    const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
-    tokenUrl.searchParams.append('client_id', facebookConfig.clientId);
-    tokenUrl.searchParams.append('client_secret', facebookConfig.clientSecret);
-    tokenUrl.searchParams.append('redirect_uri', facebookConfig.callbackURL);
-    tokenUrl.searchParams.append('code', code);
-
-    const tokenResp = await fetch(tokenUrl.toString());
-    if (!tokenResp.ok) {
-      throw new UnauthorizedException('Failed to exchange Facebook OAuth code');
-    }
-
-    const tokenData = (await tokenResp.json()) as { access_token?: string };
-    if (!tokenData.access_token) {
-      throw new UnauthorizedException('Facebook OAuth token missing access_token');
-    }
-
-    const meUrl = new URL('https://graph.facebook.com/me');
-    meUrl.searchParams.append('fields', 'id,name,email');
-    meUrl.searchParams.append('access_token', tokenData.access_token);
-
-    const meResp = await fetch(meUrl.toString());
-    if (!meResp.ok) {
-      throw new UnauthorizedException('Failed to fetch Facebook profile');
-    }
-
-    const me = (await meResp.json()) as {
-      email?: string;
-      name?: string;
-      id?: string;
-    };
-
-    const email = me.email || '';
-    const displayName = me.name || 'facebook_user';
-
-    const { token } = await this.authService.handleFacebookUser({
-      email,
-      displayName,
-    });
-
-    return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
   }
 
   // ── 2FA Email: Request Code (No Auth) ─────────────────
