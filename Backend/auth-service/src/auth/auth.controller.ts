@@ -190,17 +190,14 @@ export class AuthController {
   async googleCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
     try {
       const { code, state, error } = req.query;
-      console.log('Google callback received:', { code: !!code, state, error });
       const authCode = Array.isArray(code) ? code[0] : code;
       
       if (error) {
-        console.error('Google OAuth error:', error);
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
         return reply.redirect(`${frontendUrl}/auth/login?error=${error}`);
       }
 
       if (!authCode || typeof authCode !== 'string') {
-        console.error('No code in Google callback');
         const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
         return reply.redirect(`${frontendUrl}/auth/login?error=no_code`);
       }
@@ -224,8 +221,6 @@ export class AuthController {
       });
 
       if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.error('Google token exchange failed:', errorText);
         throw new Error('Token exchange failed');
       }
 
@@ -244,7 +239,6 @@ export class AuthController {
       }
 
       const profile = await profileResponse.json();
-      console.log('Google profile received:', { email: profile.email, name: profile.name });
 
       // Process the user
       const { token } = await this.authService.handleGoogleUser({
@@ -254,10 +248,8 @@ export class AuthController {
       });
 
       const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
-      console.log('Redirecting to:', `${frontendUrl}/auth/callback?token=${token.substring(0, 20)}...`);
       return reply.redirect(`${frontendUrl}/auth/callback?token=${token}`);
-    } catch (error) {
-      console.error('Google callback error:', error);
+    } catch {
       const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
       return reply.redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
     }
@@ -322,13 +314,6 @@ export class AuthController {
     });
 
     if (!tokenResp.ok) {
-      const errorBody = await tokenResp.text();
-      console.error('42 OAuth token exchange failed:', {
-        status: tokenResp.status,
-        body: errorBody,
-        clientID: fortyTwoConfig.clientId,
-        callbackURL: fortyTwoConfig.callbackURL,
-      });
       throw new UnauthorizedException('Failed to exchange 42 OAuth code');
     }
 

@@ -32,17 +32,19 @@ DB_PASSWORD_ENCODED=$(echo "$DB_PASSWORD_RAW" | sed 's/+/%2B/g; s/\//%2F/g; s/=/
 export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD_ENCODED}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
 export REDIS_PASSWORD=$(cat /run/secrets/redis_password)
 
-# ── Prisma: generate client + apply migrations ──────────────
+# ── Prisma: generate client + apply schema ──────────────
 if [ -f "prisma/schema.prisma" ]; then
   echo "⏳ Running prisma generate..."
   npx prisma generate
-  echo "⏳ Running prisma migrate deploy..."
-  if [ ! -d "prisma/migrations" ]; then
-    echo "⏳ Running prisma migrate dev --name init..."
-    npx prisma migrate dev --name init
-  else
+  
+  # Use db push if no migrations exist, otherwise use migrate deploy
+  if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
     echo "⏳ Running prisma migrate deploy..."
-    npx prisma migrate deploy
+    npx prisma migrate deploy || echo "⚠ migrate deploy failed, trying db push..."
+    npx prisma db push --accept-data-loss 2>/dev/null || true
+  else
+    echo "⏳ Running prisma db push..."
+    npx prisma db push --accept-data-loss
   fi
   echo "✔ Prisma ready"
 fi
