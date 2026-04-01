@@ -1,1 +1,0 @@
-export { useCarteira } from './useCarteira';
