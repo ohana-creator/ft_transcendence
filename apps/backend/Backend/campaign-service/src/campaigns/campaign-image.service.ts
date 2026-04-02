@@ -95,7 +95,8 @@ export class CampaignImageService {
       const localPath = join(this.uploadsDir, key);
       mkdirSync(join(this.uploadsDir, 'campaigns', userId), { recursive: true });
       await writeFile(localPath, processed);
-      return `${this.publicBaseUrl}/uploads/${key}`;
+      const base = this.publicBaseUrl.replace(/\/+$/, '');
+      return `${base}/uploads/${key}`;
     }
 
     try {

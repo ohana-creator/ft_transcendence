@@ -53,7 +53,11 @@ export default function TransferirPage() {
       toast.success(tr.sucesso_titulo);
       setSucesso(true);
     } catch (err: any) {
-      const message = err?.message || tr.erro_transferencia;
+      const rawMessage = err?.message || tr.erro_transferencia;
+      const recipientNotFound = /USER_NOT_FOUND|RECIPIENT_USER_NOT_FOUND|RECIPIENT_WALLET_NOT_FOUND|Destinatario invalido ou nao encontrado/i.test(rawMessage);
+      const message = recipientNotFound
+        ? tr.erro_destinatario_invalido
+        : rawMessage;
       setErro(message);
       toast.error(t.common.error, message);
     } finally {

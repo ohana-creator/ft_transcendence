@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/auth";
 import { api } from "@/utils/api/api";
 import { getCarteiraData } from "@/utils/wallet";
 import { useWalletBalance } from "@/hooks/react-query";
+import { toast } from "@/utils/toast";
 
 type WrappedData<T> = T | { data?: T; success?: boolean };
 
@@ -120,6 +121,7 @@ type OnlineStatusApiResponse =
   | { data?: { onlineUsers?: OnlineStatusUser[] } };
 
 const ONLINE_TIMEOUT_MS = 60 * 1000;
+const USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
 
 function unwrapData<T>(payload: WrappedData<T>): T {
   if (payload && typeof payload === 'object' && 'data' in payload && payload.data) {
@@ -516,16 +518,63 @@ function UserCard({
                     return;
                   }
 
+                  const nextUsername = draft.username.trim();
+                  const currentUsername = data.username.trim();
+                  const currentEmail = data.email.trim().toLowerCase();
+                  const requestedEmail = draft.email.trim().toLowerCase();
+
+                  const usernameChanged = nextUsername !== currentUsername;
+                  const emailChanged = requestedEmail !== currentEmail;
+
+                  if (!usernameChanged && !emailChanged) {
+                    setIsEditing(false);
+                    return;
+                  }
+
+                  if (emailChanged && !usernameChanged) {
+                    toast.error('A alteracao de email ainda nao esta disponivel.');
+                    return;
+                  }
+
+                  if (nextUsername.length < 3 || nextUsername.length > 30 || !USERNAME_REGEX.test(nextUsername)) {
+                    toast.error('O nome de utilizador deve ter 3-30 caracteres e usar apenas letras, numeros e underscore.');
+                    return;
+                  }
+
+                  if (usernameChanged) {
+                    try {
+                      const searchResponse = await api.get<UsersSearchResponse>('/users/search', {
+                        params: {
+                          q: nextUsername,
+                          page: 1,
+                          limit: 10,
+                        },
+                      });
+
+                      const normalizedUsername = nextUsername.toLowerCase();
+                      const exactTaken = extractUsersFromSearch(searchResponse).some((candidate) => (
+                        candidate.id !== userId
+                        && candidate.username.trim().toLowerCase() === normalizedUsername
+                      ));
+
+                      if (exactTaken) {
+                        toast.error('Esse nome de utilizador ja existe.');
+                        return;
+                      }
+                    } catch {
+                      // Se a pesquisa falhar, seguimos para o PUT e deixamos o backend validar.
+                    }
+                  }
+
                   try {
                     const response = await api.put<WrappedData<ProfileApiData>>(`/users/${userId}`, {
-                      email: draft.email,
-                      username: draft.username,
+                      username: nextUsername,
                     });
                     const updated = unwrapData(response);
 
                     const nextData: UserData = {
-                      email: updated?.email || draft.email,
-                      username: updated?.username || draft.username,
+                      email: user?.email || data.email,
+                      username: updated?.username || nextUsername,
                     };
 
                     setData(nextData);
@@ -538,13 +587,28 @@ function UserCard({
                     if (user) {
                       setUser({
                         ...user,
-                        email: nextData.email,
+                        email: user.email,
                         username: nextData.username,
                       });
                     }
 
+                    if (emailChanged) {
+                      toast.info('Email mantido sem alteracoes. Esta funcionalidade sera disponibilizada em breve.');
+                    }
+
                     setIsEditing(false);
-                  } catch {
+                  } catch (error) {
+                    const apiError = error as { status?: number; message?: string | string[] };
+                    const apiMessage = Array.isArray(apiError?.message)
+                      ? apiError.message[0]
+                      : apiError?.message;
+
+                    if ((apiError?.status === 400 || apiError?.status === 409) && apiMessage) {
+                      toast.error(apiMessage);
+                    } else {
+                      toast.error('Nao foi possivel atualizar o perfil.');
+                    }
+
                     setData(draft);
                     setIsEditing(false);
                   }

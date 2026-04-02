@@ -15,12 +15,14 @@ import { RealTimeNotification } from '@/components/realtime';
 import { ThemeProvider } from 'next-themes';
 import { ReactQueryProvider } from '@/components/providers/QueryClientProvider';
 import { ConsoleSilencer } from '@/components/providers/ConsoleSilencer';
+import { ChunkLoadRecovery } from '@/components/providers/ChunkLoadRecovery';
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <I18nProvider>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
         <ConsoleSilencer />
+        <ChunkLoadRecovery />
         <ReactQueryProvider>
           <AuthProvider>
             <VaquinhasProvider>

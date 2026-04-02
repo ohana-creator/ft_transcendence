@@ -64,7 +64,7 @@ export class EventConsumerService implements OnModuleInit, OnModuleDestroy
             this.logger.debug('Notification created for campaign.closed');
         });
 
-        this.on('campaign-events', 'campaign.goal_reached', async (payload) => {
+        const handleGoalReached = async (payload: any) => {
             await this.notificationsService.create({
                 userId: payload.ownerId,
                 type: 'CAMPAIGN_GOAL_REACHED',
@@ -72,8 +72,11 @@ export class EventConsumerService implements OnModuleInit, OnModuleDestroy
                 message: `Campaign "${payload.title}" has reached its funding goal!`,
                 metadata: { campaignId: payload.id },
             });
-            this.logger.debug('Notification created for campaign.goal_reached');
-        });
+            this.logger.debug('Notification created for goal reached event');
+        };
+
+        this.on('campaign-events', 'goal.reached', handleGoalReached);
+        this.on('campaign-events', 'campaign.goal_reached', handleGoalReached);
 
         this.on('campaign-events', 'member.promoted', async (payload) => {
             await this.notificationsService.create({

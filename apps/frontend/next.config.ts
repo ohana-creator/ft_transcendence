@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const apiGatewayInternalUrl = process.env.API_GATEWAY_INTERNAL_URL || 'http://localhost:3000';
+const isProduction = process.env.NODE_ENV === 'production';
+const staticAssetsCacheControl = isProduction
+  ? 'public, max-age=31536000, immutable'
+  : 'no-store, must-revalidate';
 
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, '');
@@ -59,7 +63,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            value: staticAssetsCacheControl,
           },
         ],
       },
@@ -69,7 +73,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            value: staticAssetsCacheControl,
           },
         ],
       },

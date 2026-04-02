@@ -84,13 +84,33 @@ export function useNotifications(): UseNotificationsReturn {
     // Fetch inicial sempre
     fetchNotifications();
 
+    const refreshNotifications = () => {
+      fetchNotifications().catch(() => undefined);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshNotifications();
+      }
+    };
+
+    const fallbackInterval = setInterval(refreshNotifications, 15000);
+    window.addEventListener('focus', refreshNotifications);
+    window.addEventListener('visibilitychange', handleVisibility);
+
+    const cleanupFallback = () => {
+      clearInterval(fallbackInterval);
+      window.removeEventListener('focus', refreshNotifications);
+      window.removeEventListener('visibilitychange', handleVisibility);
+    };
+
     // WebSocket opcional
     if (!WS_ENABLED) {
-      return;
+      return cleanupFallback;
     }
 
     if (!WS_URL) {
-      return;
+      return cleanupFallback;
     }
 
     let reconnectAttempts = 0;
@@ -144,9 +164,11 @@ export function useNotifications(): UseNotificationsReturn {
 
       return () => {
         socket.disconnect();
+        cleanupFallback();
       };
     } catch (err) {
       setConnected(false);
+      return cleanupFallback;
     }
   }, [fetchNotifications]);
 

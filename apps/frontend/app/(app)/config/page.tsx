@@ -8,6 +8,7 @@ import { useTheme } from "next-themes";
 import { TranslationKeys } from "@/locales/pt";
 import { VaksMascot } from "@/components/config/mascot";
 import { api } from "@/utils/api/api";
+import { readMockPrivacySettings, writeMockPrivacySettings } from "@/utils/privacy/mockPrivacy";
 import { useAuth } from "@/contexts/auth";
 import { useRouter } from "next/navigation";
 import { toast } from "@/utils/toast";
@@ -33,6 +34,11 @@ type ProfileApiData = {
 };
 
 type WrappedData<T> = T | { data?: T; success?: boolean };
+
+type UsersSearchResponse = WrappedData<{
+  users?: Array<{ id: string; username: string }>;
+  items?: Array<{ id: string; username: string }>;
+}>;
 
 type SettingsApiData = {
   notifications?: {
@@ -69,6 +75,40 @@ function unwrapData<T>(payload: WrappedData<T>): T {
   return payload as T;
 }
 
+function extractUsersFromSearch(payload: UsersSearchResponse): Array<{ id: string; username: string }> {
+  if (!payload || typeof payload !== "object") return [];
+
+  if ("users" in payload && Array.isArray(payload.users)) {
+    return payload.users;
+  }
+
+  if ("items" in payload && Array.isArray(payload.items)) {
+    return payload.items;
+  }
+
+  if (
+    "data" in payload
+    && payload.data
+    && typeof payload.data === "object"
+    && "users" in payload.data
+    && Array.isArray((payload.data as { users?: Array<{ id: string; username: string }> }).users)
+  ) {
+    return (payload.data as { users: Array<{ id: string; username: string }> }).users;
+  }
+
+  if (
+    "data" in payload
+    && payload.data
+    && typeof payload.data === "object"
+    && "items" in payload.data
+    && Array.isArray((payload.data as { items?: Array<{ id: string; username: string }> }).items)
+  ) {
+    return (payload.data as { items: Array<{ id: string; username: string }> }).items;
+  }
+
+  return [];
+}
+
 const DEFAULT_SETTINGS: Required<SettingsApiData> = {
   notifications: {
     emailContribuicoes: true,
@@ -96,6 +136,10 @@ const DEFAULT_SETTINGS: Required<SettingsApiData> = {
     language: "pt",
   },
 };
+
+const USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+const MOCK_PASSWORD_CHANGE = true;
 
 const getMenuItems = (settings: TranslationKeys['configuration']) => [
   { label: settings.conta.titulo, key: "account" as SettingsSection, icon: User },
@@ -618,29 +662,25 @@ export default function SettingsPage() {
     let cancelled = false;
 
     const loadConfigData = async () => {
+      const persistedPrivacy = readMockPrivacySettings(user.id);
+
       try {
-        const [profileResponse, settingsResponse] = await Promise.all([
-          api.get<WrappedData<ProfileApiData>>(`/users/${user.id}`),
-          api.get<WrappedData<SettingsApiData>>(`/users/${user.id}/settings`),
-        ]);
+        const profileResponse = await api.get<WrappedData<ProfileApiData>>(`/users/${user.id}`);
 
         if (cancelled) return;
 
         const profileData = unwrapData(profileResponse);
-        const settings = unwrapData(settingsResponse);
 
         const mergedSettings: Required<SettingsApiData> = {
           notifications: {
             ...DEFAULT_SETTINGS.notifications,
-            ...(settings.notifications || {}),
           },
           privacy: {
             ...DEFAULT_SETTINGS.privacy,
-            ...(settings.privacy || {}),
+            ...persistedPrivacy,
           },
           appearance: {
             ...DEFAULT_SETTINGS.appearance,
-            ...(settings.appearance || {}),
           },
         };
 
@@ -668,6 +708,20 @@ export default function SettingsPage() {
           email: user.email || "",
           username: user.username || "",
         });
+        setSettingsData((prev) => ({
+          ...prev,
+          privacy: {
+            ...prev.privacy,
+            ...persistedPrivacy,
+          },
+        }));
+        setPrivacyState({
+          perfilPublico: persistedPrivacy.profilePublic,
+          mostrarVaquinhas: persistedPrivacy.showCampaigns,
+          mostrarContribuicoes: persistedPrivacy.showContributions,
+          mostrarCarteira: persistedPrivacy.showBalance,
+        });
+        setPrivacySettings(persistedPrivacy);
       }
     };
 
@@ -681,27 +735,87 @@ export default function SettingsPage() {
   const handleSaveAccount = async () => {
     if (!user?.id) return;
 
+    const nextUsername = account.username.trim();
+    const currentUsername = (user.username || "").trim();
+    const currentEmail = (user.email || "").trim().toLowerCase();
+    const requestedEmail = account.email.trim().toLowerCase();
+
+    const usernameChanged = nextUsername !== currentUsername;
+    const emailChanged = requestedEmail !== currentEmail;
+
+    if (!usernameChanged && !emailChanged) {
+      toast.success("Conta atualizada com sucesso");
+      return;
+    }
+
+    if (emailChanged && !usernameChanged) {
+      toast.error("A alteracao de email ainda nao esta disponivel");
+      return;
+    }
+
+    if (nextUsername.length < 3 || nextUsername.length > 30 || !USERNAME_REGEX.test(nextUsername)) {
+      toast.error("O nome de utilizador deve ter 3-30 caracteres e usar apenas letras, numeros e underscore");
+      return;
+    }
+
+    if (usernameChanged) {
+      try {
+        const searchResponse = await api.get<UsersSearchResponse>("/users/search", {
+          params: {
+            q: nextUsername,
+            page: 1,
+            limit: 10,
+          },
+        });
+
+        const normalizedUsername = nextUsername.toLowerCase();
+        const exactTaken = extractUsersFromSearch(searchResponse).some((candidate) => (
+          candidate.id !== user.id
+          && candidate.username.trim().toLowerCase() === normalizedUsername
+        ));
+
+        if (exactTaken) {
+          toast.error("Esse nome de utilizador ja existe");
+          return;
+        }
+      } catch {
+        // Se a pesquisa falhar, seguimos para o PUT e deixamos o backend validar.
+      }
+    }
+
     setSavingAccount(true);
     try {
       const response = await api.put<WrappedData<ProfileApiData>>(`/users/${user.id}`, {
-        email: account.email,
-        username: account.username,
+        username: nextUsername,
       });
       const updated = unwrapData(response);
 
       setAccount({
-        email: updated?.email || account.email,
-        username: updated?.username || account.username,
+        email: user.email || account.email,
+        username: updated?.username || nextUsername,
       });
 
       setUser({
         ...user,
-        email: updated?.email || account.email,
-        username: updated?.username || account.username,
+        email: user.email,
+        username: updated?.username || nextUsername,
       });
+
+      if (emailChanged) {
+        toast.info("Email mantido sem alteracoes. Esta funcionalidade sera disponibilizada em breve");
+      }
       toast.success("Conta atualizada com sucesso");
-    } catch {
-      toast.error("Nao foi possivel guardar os dados da conta");
+    } catch (error) {
+      const apiError = error as { status?: number; message?: string | string[] };
+      const apiMessage = Array.isArray(apiError?.message)
+        ? apiError.message[0]
+        : apiError?.message;
+
+      if ((apiError?.status === 400 || apiError?.status === 409) && apiMessage) {
+        toast.error(apiMessage);
+      } else {
+        toast.error("Nao foi possivel guardar os dados da conta");
+      }
     } finally {
       setSavingAccount(false);
     }
@@ -720,6 +834,11 @@ export default function SettingsPage() {
       return false;
     }
 
+    if (!PASSWORD_POLICY_REGEX.test(newPassword)) {
+      toast.error("A nova palavra-passe deve incluir maiuscula, minuscula e numero");
+      return false;
+    }
+
     if (newPassword !== confirmPassword) {
       toast.error("As palavras-passe não correspondem");
       return false;
@@ -727,6 +846,12 @@ export default function SettingsPage() {
 
     setSavingPassword(true);
     try {
+      if (MOCK_PASSWORD_CHANGE) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        toast.success(`${config.conta.card2.sucesso} (mock)`);
+        return true;
+      }
+
       await api.post(`/auth/change-password`, {
         currentPassword,
         newPassword,
@@ -782,22 +907,13 @@ export default function SettingsPage() {
 
     setSavingPrivacy(true);
     try {
-      await api.put(`/users/${user.id}/settings`, {
-        privacy: nextPrivacy,
-      });
+      writeMockPrivacySettings(user.id, nextPrivacy);
       setSettingsData((prev) => ({
         ...prev,
         privacy: nextPrivacy,
       }));
-      setPrivacySettings({
-        profilePublic: privacyState.perfilPublico,
-        showBalance: privacyState.mostrarCarteira,
-        showContributions: privacyState.mostrarContribuicoes,
-        showCampaigns: privacyState.mostrarVaquinhas,
-      });
+      setPrivacySettings(nextPrivacy);
       toast.success("Privacidade atualizada com sucesso");
-    } catch {
-      toast.error("Nao foi possivel guardar as definicoes de privacidade");
     } finally {
       setSavingPrivacy(false);
     }

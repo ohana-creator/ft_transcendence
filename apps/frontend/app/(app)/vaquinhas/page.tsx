@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Lock, Globe, Plus, Search, ChevronRight, ChevronLeft, Target, Users, LayoutGrid } from 'lucide-react';
 import { CardCarousel } from '@/components/ui/card-carousel';
@@ -14,6 +14,59 @@ function getVaquinhaDetailPath(vaquinha: VaquinhaPublica): string {
 // ─── Tipos ──────────────────────────────────────────────────────────────
 
 type VaquinhaTab = 'publicas' | 'privadas';
+
+const ALL_CATEGORY = '__ALL__';
+
+const CATEGORY_KEY_BY_ALIAS: Record<string, string> = {
+  __all__: ALL_CATEGORY,
+  all: ALL_CATEGORY,
+  todas: ALL_CATEGORY,
+  todasascampanhas: ALL_CATEGORY,
+  todaslascampanas: ALL_CATEGORY,
+  toutes: ALL_CATEGORY,
+  touteslescampagnes: ALL_CATEGORY,
+
+  solidariedade: 'solidariedade',
+  solidarity: 'solidariedade',
+  solidarite: 'solidariedade',
+  solidaridad: 'solidariedade',
+
+  educacao: 'educacao',
+  education: 'educacao',
+  educacion: 'educacao',
+
+  eventos: 'eventos',
+  events: 'eventos',
+  evenements: 'eventos',
+
+  comunidade: 'comunidade',
+  community: 'comunidade',
+  communaute: 'comunidade',
+  comunidad: 'comunidade',
+
+  desporto: 'desporto',
+  sport: 'desporto',
+  sports: 'desporto',
+  deporte: 'desporto',
+
+  cultura: 'cultura',
+  culture: 'cultura',
+};
+
+function normalizeCategoryKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_\s-]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, '');
+}
+
+function toCategoryKey(value: string): string {
+  const normalized = normalizeCategoryKey(value);
+  return CATEGORY_KEY_BY_ALIAS[normalized] || normalized;
+}
 
 // ─── Social Proof Ticker ────────────────────────────────────────────────
 function SocialProofTicker() {
@@ -155,7 +208,7 @@ function StatsBar({ vaquinhas }: { vaquinhas: VaquinhaPublica[] }) {
 }
 
 // ─── Hero Destaque Card ─────────────────────────────────────────────────
-function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
+function DestaqueHero({ vaquinha, categoryLabel }: { vaquinha: VaquinhaPublica; categoryLabel: string }) {
   const router = useRouter();
   const { t } = useI18n();
   const hb = t.vaquinhas.hub;
@@ -174,13 +227,8 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
       className="group cursor-pointer relative rounded-3xl overflow-hidden border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card shadow-sm hover:shadow-2xl transition-all duration-300"
     >
       <div className="grid md:grid-cols-2 gap-0">
-        {/* Imagem */}
         <div className="relative h-72 md:h-auto overflow-hidden rounded-3xl m-4">
-          <img
-            src={vaquinha.imagem}
-            alt={vaquinha.nome}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 rounded-2xl"
-          />
+          <div className="w-full h-full bg-violet-700" />
           <div className="absolute top-5 left-5">
             <div className="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-400 rounded-xl text-sm font-bold text-white shadow-lg">
               {hb.vaquinha_destaque}
@@ -191,7 +239,7 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
         {/* Info */}
         <div className="p-8 flex flex-col justify-center space-y-5">
           <div>
-            <span className="text-xs font-bold text-orange-500 uppercase tracking-widest">{vaquinha.categoria.toUpperCase()}</span>
+            <span className="text-xs font-bold text-orange-500 uppercase tracking-widest">{categoryLabel.toUpperCase()}</span>
             <h2 className="text-2xl md:text-3xl font-extrabold text-vaks-light-main-txt dark:text-vaks-dark-main-txt mt-2 group-hover:text-purple-700 transition-colors">
               {vaquinha.nome}
             </h2>
@@ -249,19 +297,30 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
 }
 
 // ─── Vaquinha Card ──────────────────────────────────────────────────────
-function VaquinhaPublicaCard({ vaquinha, index }: { vaquinha: VaquinhaPublica; index: number }) {
+function VaquinhaPublicaCard({
+  vaquinha,
+  index,
+  categoryKey,
+  categoryLabel,
+}: {
+  vaquinha: VaquinhaPublica;
+  index: number;
+  categoryKey: string;
+  categoryLabel: string;
+}) {
   const router = useRouter();
+  const { t } = useI18n();
   const percent = vaquinha.meta > 0
     ? Math.min((vaquinha.arrecadado / vaquinha.meta) * 100, 100)
     : 0;
 
   const categoryColors: Record<string, string> = {
-    'Solidariedade': 'bg-rose-50 text-rose-600 border-rose-200',
-    'Educacao': 'bg-blue-50 text-blue-600 border-blue-200',
-    'Eventos': 'bg-amber-50 text-amber-600 border-amber-200',
-    'Comunidade': 'bg-emerald-50 text-emerald-600 border-emerald-200',
-    'Desporto': 'bg-cyan-50 text-cyan-600 border-cyan-200',
-    'Cultura': 'bg-purple-50 text-purple-600 border-purple-200',
+    solidariedade: 'bg-rose-50 text-rose-600 border-rose-200',
+    educacao: 'bg-blue-50 text-blue-600 border-blue-200',
+    eventos: 'bg-amber-50 text-amber-600 border-amber-200',
+    comunidade: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+    desporto: 'bg-cyan-50 text-cyan-600 border-cyan-200',
+    cultura: 'bg-purple-50 text-purple-600 border-purple-200',
   };
 
   const gradients = [
@@ -273,22 +332,15 @@ function VaquinhaPublicaCard({ vaquinha, index }: { vaquinha: VaquinhaPublica; i
     'from-violet-600 via-violet-500 to-violet-400',
   ];
 
-  const catColor = categoryColors[vaquinha.categoria] || 'bg-gray-50 text-gray-600 border-gray-200';
+  const catColor = categoryColors[categoryKey] || 'bg-gray-50 text-gray-600 border-gray-200';
 
   return (
     <button
       onClick={() => router.push(getVaquinhaDetailPath(vaquinha))}
-      className="group bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-400 text-left border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover hover:-translate-y-1"
+      className="group bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-400 text-left border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover hover:-translate-y-1 h-full flex flex-col"
     >
-      {/* Imagem de Capa */}
-      <div className="relative h-48 overflow-hidden">
-        <img
-          src={vaquinha.imagem}
-          alt={vaquinha.nome}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-        />
-        <div className={`absolute inset-0 bg-gradient-to-t ${gradients[index % gradients.length]} opacity-30 mix-blend-multiply`} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+      <div className="relative h-48 overflow-hidden shrink-0">
+        <div className="absolute inset-0 bg-violet-700" />
 
         {/* Destaque Badge */}
         {vaquinha.destaque && (
@@ -302,7 +354,7 @@ function VaquinhaPublicaCard({ vaquinha, index }: { vaquinha: VaquinhaPublica; i
         {/* Categoria */}
         <div className="absolute top-4 right-4">
           <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border backdrop-blur-sm bg-white/80 ${catColor}`}>
-            {vaquinha.categoria}
+            {categoryLabel}
           </span>
         </div>
 
@@ -322,18 +374,17 @@ function VaquinhaPublicaCard({ vaquinha, index }: { vaquinha: VaquinhaPublica; i
             </span>
           </div>
         </div>
+
       </div>
 
-      {/* Card Body */}
-      <div className="p-5 space-y-4">
-        <div>
+      <div className="p-5 space-y-4 flex-1 flex flex-col">
+        <div className="flex-1">
           <h3 className="text-lg font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt group-hover:text-purple-700 transition-colors line-clamp-1">
             {vaquinha.nome}
           </h3>
-          <p className="mt-1.5 text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt line-clamp-2 leading-relaxed">{vaquinha.descricao}</p>
+          <p className="mt-1.5 text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt line-clamp-2 leading-relaxed min-h-[2.5rem]">{vaquinha.descricao}</p>
         </div>
 
-        {/* Progress Bar */}
         <div className="space-y-2">
           <div className="flex justify-between items-baseline">
             <span className="text-sm font-extrabold text-purple-600">{vaquinha.arrecadado.toLocaleString()} VAKS</span>
@@ -347,7 +398,6 @@ function VaquinhaPublicaCard({ vaquinha, index }: { vaquinha: VaquinhaPublica; i
           </div>
         </div>
 
-        {/* Rodape: Criador + Avatares */}
         <div className="flex items-center justify-between pt-3 border-t border-gray-100">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-700 via-violet-600 to-violet-500 flex items-center justify-center text-[10px] font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">
@@ -368,22 +418,48 @@ export default function VaquinhasLayoutPage() {
   const router = useRouter();
   const { t } = useI18n();
   const hb = t.vaquinhas.hub;
+  const translateCategory = useCallback((category: string): string => {
+    const key = toCategoryKey(category);
+    if (key === ALL_CATEGORY) return hb.todas;
+
+    const dictionary: Record<string, string> = {
+      solidariedade: t.criar.publicas.informacoes.categorias.solidariedade,
+      educacao: t.criar.publicas.informacoes.categorias.educacao,
+      eventos: t.criar.publicas.informacoes.categorias.eventos,
+      comunidade: t.criar.publicas.informacoes.categorias.comunidade,
+      desporto: t.criar.publicas.informacoes.categorias.desporto,
+      cultura: t.criar.publicas.informacoes.categorias.cultura,
+    };
+
+    return dictionary[key] || category;
+  }, [
+    hb.todas,
+    t.criar.publicas.informacoes.categorias.solidariedade,
+    t.criar.publicas.informacoes.categorias.educacao,
+    t.criar.publicas.informacoes.categorias.eventos,
+    t.criar.publicas.informacoes.categorias.comunidade,
+    t.criar.publicas.informacoes.categorias.desporto,
+    t.criar.publicas.informacoes.categorias.cultura,
+  ]);
 
   const [search, setSearch] = useState('');
-  const [categoriaAtiva, setCategoriaAtiva] = useState('Todas');
+  const [categoriaAtiva, setCategoriaAtiva] = useState(ALL_CATEGORY);
   const [viewMode, setViewMode] = useState<'carousel' | 'grid'>('carousel');
+
+  const activeCategoryKey = toCategoryKey(categoriaAtiva);
 
   const { vaquinhas, loading } = useVaquinhas();
 
   const categorias = useMemo(() => {
-    const cats = Array.from(new Set(vaquinhas.map((v) => v.categoria)));
-    return ['Todas', ...cats];
+    const cats = Array.from(new Set(vaquinhas.map((v) => toCategoryKey(v.categoria))));
+    return [ALL_CATEGORY, ...cats];
   }, [vaquinhas]);
 
   const categoriaCounts = useMemo(() => {
-    const counts: Record<string, number> = { Todas: vaquinhas.length };
+    const counts: Record<string, number> = { [ALL_CATEGORY]: vaquinhas.length };
     vaquinhas.forEach((v) => {
-      counts[v.categoria] = (counts[v.categoria] || 0) + 1;
+      const key = toCategoryKey(v.categoria);
+      counts[key] = (counts[key] || 0) + 1;
     });
     return counts;
   }, [vaquinhas]);
@@ -392,13 +468,13 @@ export default function VaquinhasLayoutPage() {
     return vaquinhas.filter((v) => {
       const matchSearch = v.nome.toLowerCase().includes(search.toLowerCase()) ||
                           v.descricao.toLowerCase().includes(search.toLowerCase());
-      const matchCategoria = categoriaAtiva === 'Todas' || v.categoria === categoriaAtiva;
+      const matchCategoria = activeCategoryKey === ALL_CATEGORY || toCategoryKey(v.categoria) === activeCategoryKey;
       return matchSearch && matchCategoria;
     });
-  }, [vaquinhas, search, categoriaAtiva]);
+  }, [vaquinhas, search, activeCategoryKey]);
 
   const destaque = vaquinhas.find((v) => v.destaque);
-  const restantes = filteredVaquinhas.filter((v) => !v.destaque || categoriaAtiva !== 'Todas');
+  const restantes = filteredVaquinhas.filter((v) => !v.destaque || activeCategoryKey !== ALL_CATEGORY);
 
   const avatarColors = [
     'bg-yellow-400', 'bg-pink-400', 'bg-teal-400', 'bg-indigo-400', 'bg-orange-400',
@@ -465,7 +541,7 @@ export default function VaquinhasLayoutPage() {
           ) : (
             <>
           {/* Destaque Hero */}
-          {destaque && categoriaAtiva === 'Todas' && !search && (
+          {destaque && activeCategoryKey === ALL_CATEGORY && !search && (
             <div>
               <div className="mb-6 flex items-center justify-between">
                 <div>
@@ -473,7 +549,7 @@ export default function VaquinhasLayoutPage() {
                   <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt mt-1">{hb.destaque_desc}</p>
                 </div>
               </div>
-              <DestaqueHero vaquinha={destaque} />
+              <DestaqueHero vaquinha={destaque} categoryLabel={translateCategory(destaque.categoria)} />
             </div>
           )}
 
@@ -493,8 +569,8 @@ export default function VaquinhasLayoutPage() {
               {categorias.map((cat) => (
                 <CategoryPill
                   key={cat}
-                  label={cat}
-                  active={categoriaAtiva === cat}
+                  label={translateCategory(cat)}
+                  active={activeCategoryKey === cat}
                   onClick={() => setCategoriaAtiva(cat)}
                   count={categoriaCounts[cat]}
                 />
@@ -506,7 +582,7 @@ export default function VaquinhasLayoutPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-2xl font-extrabold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">
-                {categoriaAtiva === 'Todas' ? hb.todas_campanhas : categoriaAtiva}
+                {activeCategoryKey === ALL_CATEGORY ? hb.todas_campanhas : translateCategory(activeCategoryKey)}
               </h3>
               <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt mt-1">{hb.acompanhe_contribua}</p>
             </div>
@@ -533,14 +609,25 @@ export default function VaquinhasLayoutPage() {
               <CardCarousel>
                 {restantes.map((v, i) => (
                   <div key={v.id} className="flex-shrink-0 w-[280px] sm:w-[340px]">
-                    <VaquinhaPublicaCard vaquinha={v} index={i} />
+                    <VaquinhaPublicaCard
+                      vaquinha={v}
+                      index={i}
+                      categoryKey={toCategoryKey(v.categoria)}
+                      categoryLabel={translateCategory(v.categoria)}
+                    />
                   </div>
                 ))}
               </CardCarousel>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
                 {restantes.map((v, i) => (
-                  <VaquinhaPublicaCard key={v.id} vaquinha={v} index={i} />
+                  <VaquinhaPublicaCard
+                    key={v.id}
+                    vaquinha={v}
+                    index={i}
+                    categoryKey={toCategoryKey(v.categoria)}
+                    categoryLabel={translateCategory(v.categoria)}
+                  />
                 ))}
               </div>
             )
@@ -551,7 +638,7 @@ export default function VaquinhasLayoutPage() {
               </div>
               <p className="text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt text-sm">{hb.nenhuma_encontrada}</p>
               <button
-                onClick={() => { setSearch(''); setCategoriaAtiva('Todas'); }}
+                onClick={() => { setSearch(''); setCategoriaAtiva(ALL_CATEGORY); }}
                 className="text-xs text-purple-600 hover:text-purple-500 font-semibold transition-colors"
               >
                 {hb.limpar_filtros}

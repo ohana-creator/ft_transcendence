@@ -47,6 +47,16 @@ type WalletCoreWrappedResponse =
 
 type TransferResponse = WalletTxApi;
 
+type UsersSearchResult = {
+  id: string;
+  username: string;
+};
+
+type UsersSearchResponse =
+  | { users?: UsersSearchResult[]; data?: { users?: UsersSearchResult[]; items?: UsersSearchResult[] } }
+  | { data?: UsersSearchResult[] }
+  | UsersSearchResult[];
+
 const WALLET_TRANSFER_DEBUG_PREFIX = '[WalletTransferDebug]';
 
 function walletTransferLog(step: string, payload?: unknown) {
@@ -264,6 +274,42 @@ export async function getWalletTransactionById(transactionId: string): Promise<W
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function extractSearchUsers(payload: UsersSearchResponse): UsersSearchResult[] {
+  if (Array.isArray(payload)) return payload;
+
+  if (!payload || typeof payload !== 'object') return [];
+
+  if ('users' in payload && Array.isArray(payload.users)) {
+    return payload.users;
+  }
+
+  if ('data' in payload && Array.isArray(payload.data)) {
+    return payload.data;
+  }
+
+  if (
+    'data' in payload
+    && payload.data
+    && typeof payload.data === 'object'
+    && 'users' in payload.data
+    && Array.isArray(payload.data.users)
+  ) {
+    return payload.data.users;
+  }
+
+  if (
+    'data' in payload
+    && payload.data
+    && typeof payload.data === 'object'
+    && 'items' in payload.data
+    && Array.isArray(payload.data.items)
+  ) {
+    return payload.data.items;
+  }
+
+  return [];
+}
+
 export async function transferirVaks(payload: {
   recipient: string;
   amount: number;
@@ -302,6 +348,30 @@ export async function transferirVaks(payload: {
 
   if (payload.note && payload.note.length > 500) {
     throw new Error('Nota deve ter no maximo 500 caracteres.');
+  }
+
+  // Valida destinatario antes do POST para evitar 404 esperados no console.
+  if (isUuid) {
+    try {
+      await api.get(`/users/${recipient}`);
+    } catch {
+      throw new Error('Destinatario invalido ou nao encontrado.');
+    }
+  }
+
+  if (isEmail) {
+    try {
+      const searchPayload = await api.get<UsersSearchResponse>('/users/search', {
+        params: { q: recipient.toLowerCase(), page: 1, limit: 5 },
+      });
+      const users = extractSearchUsers(searchPayload);
+
+      if (!users.length) {
+        throw new Error('Destinatario invalido ou nao encontrado.');
+      }
+    } catch {
+      throw new Error('Destinatario invalido ou nao encontrado.');
+    }
   }
 
   const requestPayload: Record<string, unknown> = {

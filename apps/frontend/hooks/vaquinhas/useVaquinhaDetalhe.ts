@@ -118,9 +118,30 @@ function resolveCampaignImage(campaign: Campaign): string | undefined {
       return path;
     };
 
+    const toLocalUploadsPath = (path: string): string | null => {
+      const rewritten = rewriteCampaignPath(path);
+
+      if (rewritten.startsWith('/uploads/')) {
+        return rewritten;
+      }
+
+      if (rewritten.startsWith('uploads/')) {
+        return `/${rewritten}`;
+      }
+
+      return null;
+    };
+
+    const localPath = toLocalUploadsPath(trimmed);
+    if (localPath) return localPath;
+
     if (/^https?:\/\//i.test(trimmed)) {
       try {
         const parsed = new URL(trimmed);
+        const rewrittenPath = toLocalUploadsPath(parsed.pathname);
+        if (rewrittenPath) {
+          return `${rewrittenPath}${parsed.search}${parsed.hash}`;
+        }
         parsed.pathname = rewriteCampaignPath(parsed.pathname);
         return parsed.toString();
       } catch {
@@ -129,7 +150,10 @@ function resolveCampaignImage(campaign: Campaign): string | undefined {
     }
 
     try {
-      return new URL(rewriteCampaignPath(trimmed), resolveApiOrigin()).toString();
+      const rewritten = rewriteCampaignPath(trimmed);
+      const localRewritten = toLocalUploadsPath(rewritten);
+      if (localRewritten) return localRewritten;
+      return new URL(rewritten, resolveApiOrigin()).toString();
     } catch {
       return rewriteCampaignPath(trimmed);
     }

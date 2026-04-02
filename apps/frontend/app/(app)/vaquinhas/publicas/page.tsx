@@ -8,9 +8,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence, useAnimate } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useI18n } from '@/locales';
-import { useAnimatedRouter } from "@/hooks/vaquinhas/useAnimatedRouter";
 
 // ─── Social Proof Ticker ────────────────────────────────────────────────
 interface TickerItem {
@@ -18,48 +17,42 @@ interface TickerItem {
   nome: string;
   valor: number;
   vaquinha: string;
-  timestamp: Date;
 }
 
 function SocialProofTicker() {
   const { t } = useI18n();
   const tk = t.vaquinhas.ticker;
 
-  const [items, setItems] = useState<TickerItem[]>([
+  const [items] = useState<TickerItem[]>([
     {
       id: 1,
       nome: "Alguem",
       valor: 50,
       vaquinha: "Ajuda ao Abrigo",
-      timestamp: new Date(),
     },
     {
       id: 2,
       nome: "Um amigo",
       valor: 120,
       vaquinha: "Festa de Verao",
-      timestamp: new Date(Date.now() - 60000),
     },
     {
       id: 3,
       nome: "Contribuidor",
       valor: 30,
       vaquinha: "Material Escolar",
-      timestamp: new Date(Date.now() - 120000),
     },
     {
       id: 4,
       nome: "Anonimo",
       valor: 200,
       vaquinha: "Viagem Solidaria",
-      timestamp: new Date(Date.now() - 180000),
     },
     {
       id: 5,
       nome: "Alguem generoso",
       valor: 75,
       vaquinha: "Projeto Comunitario",
-      timestamp: new Date(Date.now() - 240000),
     },
   ]);
 
@@ -100,7 +93,7 @@ function SocialProofTicker() {
             </span>{" "}
             {tk.para}{" "}
             <span className="font-semibold text-cyan-300">
-              "{items[currentIndex].vaquinha}"
+              &quot;{items[currentIndex].vaquinha}&quot;
             </span>
           </motion.p>
         </AnimatePresence>
@@ -272,12 +265,69 @@ interface VaquinhaPublica {
   destaque: boolean;
 }
 
+const ALL_CATEGORY = "__ALL__";
+
+const CATEGORY_KEY_BY_ALIAS: Record<string, string> = {
+  __all__: ALL_CATEGORY,
+  all: ALL_CATEGORY,
+  todas: ALL_CATEGORY,
+  todasascampanhas: ALL_CATEGORY,
+  todaslascampanas: ALL_CATEGORY,
+  toutes: ALL_CATEGORY,
+  touteslescampagnes: ALL_CATEGORY,
+
+  solidariedade: "solidariedade",
+  solidarity: "solidariedade",
+  solidarite: "solidariedade",
+  solidaridad: "solidariedade",
+
+  educacao: "educacao",
+  education: "educacao",
+  educacion: "educacao",
+
+  eventos: "eventos",
+  events: "eventos",
+  evenements: "eventos",
+
+  comunidade: "comunidade",
+  community: "comunidade",
+  communaute: "comunidade",
+  comunidad: "comunidade",
+
+  desporto: "desporto",
+  sport: "desporto",
+  sports: "desporto",
+  deporte: "desporto",
+
+  cultura: "cultura",
+  culture: "cultura",
+};
+
+function normalizeCategoryKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_\s-]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, "");
+}
+
+function toCategoryKey(value: string): string {
+  const normalized = normalizeCategoryKey(value);
+  return CATEGORY_KEY_BY_ALIAS[normalized] || normalized;
+}
+
 function VaquinhaPublicaCard({
   vaquinha,
   index,
+  categoryKey,
+  categoryLabel,
 }: {
   vaquinha: VaquinhaPublica;
   index: number;
+  categoryKey: string;
+  categoryLabel: string;
 }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -286,21 +336,21 @@ function VaquinhaPublicaCard({
     : 0;
 
   const categoryColors: Record<string, string> = {
-    Solidariedade:
+    solidariedade:
       "from-rose-500/20 to-pink-500/20 text-rose-300 border-rose-500/30",
-    Educacao:
+    educacao:
       "from-blue-500/20 to-indigo-500/20 text-blue-300 border-blue-500/30",
-    Eventos:
+    eventos:
       "from-amber-500/20 to-orange-500/20 text-amber-300 border-amber-500/30",
-    Comunidade:
+    comunidade:
       "from-emerald-500/20 to-teal-500/20 text-emerald-300 border-emerald-500/30",
-    Desporto: "from-cyan-500/20 to-sky-500/20 text-cyan-300 border-cyan-500/30",
-    Cultura:
+    desporto: "from-cyan-500/20 to-sky-500/20 text-cyan-300 border-cyan-500/30",
+    cultura:
       "from-purple-500/20 to-violet-500/20 text-purple-300 border-purple-500/30",
   };
 
   const categoryColor =
-    categoryColors[vaquinha.categoria] ||
+    categoryColors[categoryKey] ||
     "from-white/10 to-white/5 text-white/70 border-white/20";
 
   return (
@@ -317,13 +367,8 @@ function VaquinhaPublicaCard({
       className="group cursor-pointer"
     >
       <div className="relative bg-zinc-900/80 backdrop-blur-xl rounded-3xl border border-white/[0.06] overflow-hidden hover:border-emerald-500/30 transition-all duration-500 hover:shadow-2xl hover:shadow-emerald-500/10">
-        {/* Imagem de Capa */}
         <div className="relative h-48 overflow-hidden">
-          <div
-            className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
-            style={{ backgroundImage: `url(${vaquinha.imagem})` }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/40 to-transparent" />
+          <div className="absolute inset-0 bg-emerald-600" />
 
           {/* Badge Destaque */}
           {vaquinha.destaque && (
@@ -339,16 +384,14 @@ function VaquinhaPublicaCard({
             <div
               className={`px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r ${categoryColor} border backdrop-blur-sm`}
             >
-              {vaquinha.categoria}
+              {categoryLabel}
             </div>
           </div>
 
-          {/* Progress Ring Overlay */}
           <div className="absolute bottom-4 right-4">
             <ProgressRing percent={percent} />
           </div>
 
-          {/* Dias Restantes */}
           <div className="absolute bottom-4 left-4">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-black/50 backdrop-blur-sm rounded-lg">
               <div
@@ -363,9 +406,7 @@ function VaquinhaPublicaCard({
           </div>
         </div>
 
-        {/* Conteudo */}
         <div className="p-5 space-y-4">
-          {/* Titulo e Descricao */}
           <div>
             <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors duration-300 line-clamp-1">
               {vaquinha.nome}
@@ -375,7 +416,6 @@ function VaquinhaPublicaCard({
             </p>
           </div>
 
-          {/* Barra de Progresso Visual */}
           <div className="space-y-2">
             <div className="flex justify-between items-baseline">
               <span className="text-sm font-semibold text-white">
@@ -401,7 +441,6 @@ function VaquinhaPublicaCard({
             </div>
           </div>
 
-          {/* Rodape: Criador + Avatares */}
           <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-[10px] font-bold text-white">
@@ -418,7 +457,13 @@ function VaquinhaPublicaCard({
 }
 
 // ─── Destaque Hero Card ─────────────────────────────────────────────────
-function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
+function DestaqueHero({
+  vaquinha,
+  categoryLabel,
+}: {
+  vaquinha: VaquinhaPublica;
+  categoryLabel: string;
+}) {
   const router = useRouter();
   const { t } = useI18n();
   const percent = vaquinha.meta > 0
@@ -437,14 +482,8 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
     >
       <div className="relative rounded-3xl overflow-hidden border border-white/[0.08] bg-zinc-900/60 backdrop-blur-xl">
         <div className="grid md:grid-cols-2 gap-0">
-          {/* Lado Imagem */}
           <div className="relative h-64 md:h-80 overflow-hidden">
-            <div
-              className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-              style={{ backgroundImage: `url(${vaquinha.imagem})` }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent to-zinc-900/90 hidden md:block" />
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent md:hidden" />
+            <div className="absolute inset-0 bg-emerald-600" />
             <div className="absolute top-5 left-5">
               <div className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl text-sm font-bold text-white shadow-xl shadow-amber-500/30">
                 {t.vaquinhas.hub.vaquinha_destaque}
@@ -452,11 +491,10 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
             </div>
           </div>
 
-          {/* Lado Info */}
           <div className="p-8 flex flex-col justify-center space-y-5">
             <div>
               <p className="text-xs font-semibold text-emerald-400/80 uppercase tracking-widest mb-2">
-                {vaquinha.categoria}
+                {categoryLabel}
               </p>
               <h2 className="text-2xl md:text-3xl font-bold text-white group-hover:text-emerald-400 transition-colors">
                 {vaquinha.nome}
@@ -622,7 +660,7 @@ const mockVaquinhas: VaquinhaPublica[] = [
       "Beatriz",
     ],
     imagem:
-      "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=600&h=400&fit=crop",
+      "/assets/assets1.jpg",
     diasRestantes: 12,
     destaque: true,
   },
@@ -637,7 +675,7 @@ const mockVaquinhas: VaquinhaPublica[] = [
     categoria: "Eventos",
     contribuidores: ["Lucas", "Marta", "Andre", "Diana", "Hugo", "Ines"],
     imagem:
-      "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=600&h=400&fit=crop",
+      "/assets/assets2.jpg",
     diasRestantes: 25,
     destaque: false,
   },
@@ -662,7 +700,7 @@ const mockVaquinhas: VaquinhaPublica[] = [
       "Nuno",
     ],
     imagem:
-      "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=600&h=400&fit=crop",
+      "/assets/assets3.jpg",
     diasRestantes: 5,
     destaque: false,
   },
@@ -677,7 +715,7 @@ const mockVaquinhas: VaquinhaPublica[] = [
     categoria: "Desporto",
     contribuidores: ["Marco", "Vera", "Simao", "Clara"],
     imagem:
-      "https://images.unsplash.com/photo-1461896836934-bd45ba8fcaff?w=600&h=400&fit=crop",
+      "/assets/assets4.jpg",
     diasRestantes: 18,
     destaque: false,
   },
@@ -700,7 +738,7 @@ const mockVaquinhas: VaquinhaPublica[] = [
       "Leonor",
     ],
     imagem:
-      "https://images.unsplash.com/photo-1499781350541-7783f6c6a0c8?w=600&h=400&fit=crop",
+      "/assets/overview.jpg",
     diasRestantes: 30,
     destaque: false,
   },
@@ -722,7 +760,7 @@ const mockVaquinhas: VaquinhaPublica[] = [
       "Conceicao",
     ],
     imagem:
-      "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600&h=400&fit=crop",
+      "/assets/placeholder-vaquinha.jpg",
     diasRestantes: 0,
     destaque: false,
   },
@@ -734,18 +772,45 @@ export default function VaquinhasPublicasPage() {
   const { t } = useI18n();
   const hb = t.vaquinhas.hub;
   const pb = t.vaquinhas.publica;
+  const translateCategory = useCallback((category: string): string => {
+    const key = toCategoryKey(category);
+    if (key === ALL_CATEGORY) return hb.todas;
+
+    const dictionary: Record<string, string> = {
+      solidariedade: t.criar.publicas.informacoes.categorias.solidariedade,
+      educacao: t.criar.publicas.informacoes.categorias.educacao,
+      eventos: t.criar.publicas.informacoes.categorias.eventos,
+      comunidade: t.criar.publicas.informacoes.categorias.comunidade,
+      desporto: t.criar.publicas.informacoes.categorias.desporto,
+      cultura: t.criar.publicas.informacoes.categorias.cultura,
+    };
+
+    return dictionary[key] || category;
+  }, [
+    hb.todas,
+    t.criar.publicas.informacoes.categorias.solidariedade,
+    t.criar.publicas.informacoes.categorias.educacao,
+    t.criar.publicas.informacoes.categorias.eventos,
+    t.criar.publicas.informacoes.categorias.comunidade,
+    t.criar.publicas.informacoes.categorias.desporto,
+    t.criar.publicas.informacoes.categorias.cultura,
+  ]);
+
   const [search, setSearch] = useState("");
-  const [categoriaAtiva, setCategoriaAtiva] = useState("Todas");
+  const [categoriaAtiva, setCategoriaAtiva] = useState(ALL_CATEGORY);
+
+  const activeCategoryKey = toCategoryKey(categoriaAtiva);
 
   const categorias = useMemo(() => {
-    const cats = Array.from(new Set(mockVaquinhas.map((v) => v.categoria)));
-    return ["Todas", ...cats];
+    const cats = Array.from(new Set(mockVaquinhas.map((v) => toCategoryKey(v.categoria))));
+    return [ALL_CATEGORY, ...cats];
   }, []);
 
   const categoriaCounts = useMemo(() => {
-    const counts: Record<string, number> = { Todas: mockVaquinhas.length };
+    const counts: Record<string, number> = { [ALL_CATEGORY]: mockVaquinhas.length };
     mockVaquinhas.forEach((v) => {
-      counts[v.categoria] = (counts[v.categoria] || 0) + 1;
+      const key = toCategoryKey(v.categoria);
+      counts[key] = (counts[key] || 0) + 1;
     });
     return counts;
   }, []);
@@ -756,14 +821,14 @@ export default function VaquinhasPublicasPage() {
         v.nome.toLowerCase().includes(search.toLowerCase()) ||
         v.descricao.toLowerCase().includes(search.toLowerCase());
       const matchCategoria =
-        categoriaAtiva === "Todas" || v.categoria === categoriaAtiva;
+        activeCategoryKey === ALL_CATEGORY || toCategoryKey(v.categoria) === activeCategoryKey;
       return matchSearch && matchCategoria;
     });
-  }, [search, categoriaAtiva]);
+  }, [search, activeCategoryKey]);
 
   const destaque = mockVaquinhas.find((v) => v.destaque);
   const restantes = filteredVaquinhas.filter(
-    (v) => !v.destaque || categoriaAtiva !== "Todas",
+    (v) => !v.destaque || activeCategoryKey !== ALL_CATEGORY,
   );
 
   return (
@@ -800,8 +865,11 @@ export default function VaquinhasPublicasPage() {
         <StatsBar vaquinhas={mockVaquinhas} />
 
         {/* Hero Destaque */}
-        {destaque && categoriaAtiva === "Todas" && !search && (
-          <DestaqueHero vaquinha={destaque} />
+        {destaque && activeCategoryKey === ALL_CATEGORY && !search && (
+          <DestaqueHero
+            vaquinha={destaque}
+            categoryLabel={translateCategory(destaque.categoria)}
+          />
         )}
 
         {/* Search + Categories */}
@@ -811,8 +879,8 @@ export default function VaquinhasPublicasPage() {
             {categorias.map((cat) => (
               <CategoryPill
                 key={cat}
-                label={cat}
-                active={categoriaAtiva === cat}
+                label={translateCategory(cat)}
+                active={activeCategoryKey === cat}
                 onClick={() => setCategoriaAtiva(cat)}
                 count={categoriaCounts[cat]}
               />
@@ -831,7 +899,13 @@ export default function VaquinhasPublicasPage() {
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
             >
               {restantes.map((v, i) => (
-                <VaquinhaPublicaCard key={v.id} vaquinha={v} index={i} />
+                <VaquinhaPublicaCard
+                  key={v.id}
+                  vaquinha={v}
+                  index={i}
+                  categoryKey={toCategoryKey(v.categoria)}
+                  categoryLabel={translateCategory(v.categoria)}
+                />
               ))}
             </motion.div>
           ) : (
@@ -861,7 +935,7 @@ export default function VaquinhasPublicasPage() {
               <button
                 onClick={() => {
                   setSearch("");
-                  setCategoriaAtiva("Todas");
+                  setCategoriaAtiva(ALL_CATEGORY);
                 }}
                 className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
               >

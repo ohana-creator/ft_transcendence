@@ -6,7 +6,7 @@ import { ArrowLeft, Globe, Target, Calendar, Coins, ChevronRight, Sparkles, Tag,
 import { useI18n } from '@/locales/useI18n';
 import { PageTransition } from '@/components/PageTransition';
 import { createCampaign } from '@/utils/campaigns';
-import { uploadImage, validateImageFile, isValidImageUrl } from '@/utils/upload';
+import { uploadImage, validateImageFile, isValidImageUrl, normalizeUploadedImageUrl } from '@/utils/upload';
 
 const IMAGE_DEBUG =
   process.env.NEXT_PUBLIC_DEBUG_CAMPAIGN_IMAGE === 'true' ||
@@ -200,6 +200,10 @@ export default function CriarVaquinhaPublicaPage() {
         finalImageUrl = formData.imageUrl;
       }
 
+      if (finalImageUrl) {
+        finalImageUrl = normalizeUploadedImageUrl(finalImageUrl);
+      }
+
       if (finalImageUrl && !isValidImageUrl(finalImageUrl)) {
         if (IMAGE_DEBUG) {
         }
@@ -250,7 +254,7 @@ export default function CriarVaquinhaPublicaPage() {
       <div className="relative overflow-hidden">
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1400&h=500&fit=crop"
+            src="/assets/assets1.jpg"
             alt="Equipa a colaborar"
             className="h-full w-full object-cover"
           />
@@ -374,57 +378,6 @@ export default function CriarVaquinhaPublicaPage() {
                       )}
                       <span className="ml-auto text-xs text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">{formData.description.length}/5000</span>
                     </div>
-                  </div>
-
-                  {/* Imagem de Capa */}
-                  <div>
-                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">
-                      <ImagePlus className="h-4 w-4 text-purple-500" />
-                      {criar.informacoes.imagem}
-                    </label>
-                    {imagePreview ? (
-                      <div className="relative rounded-2xl overflow-hidden border border-vaks-light-stroke dark:border-vaks-dark-stroke">
-                        <img src={imagePreview} alt="Preview" className="w-full h-48 object-cover" />
-                        {uploadingImage && (
-                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                            <div className="flex items-center gap-2 text-white">
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                              <span className="text-sm font-medium">{t.buttons.sending_form}</span>
-                            </div>
-                          </div>
-                        )}
-                        {!uploadingImage && (
-                          <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-all duration-300 flex items-center justify-center group">
-                            <button
-                              type="button"
-                              onClick={removeImage}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white shadow-lg"
-                            >
-                              <X className="h-4 w-4" />
-                              {t.vaquinhas.criar_comum.remover}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-vaks-light-input dark:bg-vaks-dark-input py-10 transition-all hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20">
-                        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-purple-50 dark:bg-purple-900/30">
-                          <ImagePlus className="h-7 w-7 text-purple-400" />
-                        </div>
-                        <p className="text-sm font-medium text-vaks-light-main-txt dark:text-vaks-dark-main-txt">{criar.informacoes.placeholder_imagem}</p>
-                        <p className="mt-1 text-xs text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">PNG, JPG ou WebP (max. 5MB)</p>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          onChange={handleImageChange}
-                          className="hidden"
-                        />
-                      </label>
-                    )}
-                    {errors.image && (
-                      <span className="mt-2 block text-sm text-red-500">{errors.image}</span>
-                    )}
                   </div>
 
                   {/* Categoria */}
@@ -566,11 +519,6 @@ export default function CriarVaquinhaPublicaPage() {
                   </div>
                   <h3 className="text-xl font-extrabold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">{criar.regras.resumo}</h3>
                 </div>
-                {imagePreview && (
-                  <div className="mb-4 overflow-hidden rounded-2xl">
-                    <img src={imagePreview} alt="Capa da vaquinha" className="w-full h-40 object-cover" />
-                  </div>
-                )}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="rounded-2xl bg-vaks-light-purple-card-hover dark:bg-vaks-dark-purple-card-hover p-4 backdrop-blur-sm">
                     <p className="text-xs font-medium uppercase tracking-wider text-vaks-light-main-txt dark:text-vaks-dark-main-txt">{criar.regras.titulo_resumo}</p>

@@ -160,8 +160,8 @@ export default function VaquinhasPrivadasPage() {
     : 0;
 
   const cardImages = [
-    'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=600&h=400&fit=crop',
-    'https://images.unsplash.com/photo-1531545514256-b1400bc00f31?w=600&h=400&fit=crop',
+    '/assets/assets3.jpg',
+    '/assets/assets4.jpg',
   ];
 
   const cardGradients = [
@@ -343,15 +343,8 @@ export default function VaquinhasPrivadasPage() {
                   onClick={() => handleSelectVaquinha(vaquinha)}
                   className="flex-shrink-0 w-[280px] sm:w-[340px] group bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-400 text-left border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover hover:-translate-y-1"
                 >
-                  {/* Card Image Header */}
                   <div className="relative h-44 overflow-hidden">
-                    <img
-                      src={vaquinha.imagem}
-                      alt={vaquinha.nome}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                    <div className={`absolute inset-0 bg-gradient-to-t from-violet-700 via-violet-600 to-violet-500 opacity-40 mix-blend-multiply`} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <div className="absolute inset-0 bg-violet-700" />
                     <div className="absolute top-4 left-4">
                       <span className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-purple-700 shadow-sm">{pv.privada_badge}</span>
                     </div>
@@ -361,7 +354,6 @@ export default function VaquinhasPrivadasPage() {
                       </div>
                     </div>
                   </div>
-                  {/* Card Body */}
                   <div className="p-5">
                     <h3 className="text-lg font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt mb-1 line-clamp-2 group-hover:text-purple-700 transition-colors">{vaquinha.nome}</h3>
                     <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt mb-4 line-clamp-2">{vaquinha.descricao}</p>
@@ -403,39 +395,25 @@ export default function VaquinhasPrivadasPage() {
                 onClick={() => handleSelectVaquinha(vaquinha)}
                 className="group bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-400 text-left border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover hover:-translate-y-1"
               >
-                {/* Card Image Header */}
                 <div className="relative h-44 overflow-hidden">
-                  <img
-                    src={vaquinha.imagem}
-                    alt={vaquinha.nome}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-violet-700 via-violet-600 to-violet-500 opacity-40 mix-blend-multiply" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-
-                  {/* Badge */}
+                  <div className="absolute inset-0 bg-violet-700" />
                   <div className="absolute top-4 left-4">
                     <span className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-purple-700 shadow-sm">
                       {pv.privada_badge}
                     </span>
                   </div>
-
-                  {/* Percentage badge */}
                   <div className="absolute bottom-4 right-4">
                     <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-sm">
                       <span className="text-sm font-extrabold text-purple-700">{Math.round(progressPercentage)}%</span>
                     </div>
                   </div>
                 </div>
-
-                {/* Card Body */}
                 <div className="p-5">
                   <h3 className="text-lg font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt mb-1 line-clamp-2 group-hover:text-purple-700 transition-colors">
                     {vaquinha.nome}
                   </h3>
                   <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt mb-4 line-clamp-2">{vaquinha.descricao}</p>
 
-                  {/* Progress Bar */}
                   <div className="mb-4">
                     <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                       <div
@@ -445,7 +423,6 @@ export default function VaquinhasPrivadasPage() {
                     </div>
                   </div>
 
-                  {/* Valores */}
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt mb-0.5">{t.vaquinhas.arrecadado}</p>

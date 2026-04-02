@@ -463,7 +463,7 @@ export class CampaignsService {
       if (existingInvite) throw new ConflictException('Email already has a pending invitation');
     }
 
-    return this.prisma.invitation.create({
+    const invitation = await this.prisma.invitation.create({
       data: {
         campaignId,
         inviterId,
@@ -472,6 +472,20 @@ export class CampaignsService {
         invitedEmail: dto.email,
       },
     });
+
+    // In-app notifications are user-bound; email-only invites are handled outside this flow.
+    if (invitation.invitedUserId) {
+      await this.redis.publish('campaign-events', 'campaign.invited', {
+        campaignId,
+        campaignTitle: campaign.title,
+        invitationId: invitation.id,
+        inviterId,
+        inviterName,
+        invitedUserId: invitation.invitedUserId,
+      });
+    }
+
+    return invitation;
   }
 
   async getInvitations(campaignId: string, userId: string) {

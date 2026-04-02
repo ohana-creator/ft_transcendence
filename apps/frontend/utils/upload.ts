@@ -46,6 +46,7 @@ function toAbsoluteImageUrl(url: string, baseUrl: string): string {
   const trimmed = url.trim();
 
   if (!trimmed) return trimmed;
+  const apiOrigin = resolveApiOrigin(baseUrl);
 
   const rewriteCampaignPath = (path: string): string => {
     if (path.startsWith('/api/campaigns/')) {
@@ -57,36 +58,68 @@ function toAbsoluteImageUrl(url: string, baseUrl: string): string {
     return path;
   };
 
-  const normalizeHost = (rawUrl: string): string => {
+  const toLocalUploadsPath = (path: string): string | null => {
+    const rewritten = rewriteCampaignPath(path);
+
+    if (rewritten.startsWith('/uploads/')) {
+      return rewritten;
+    }
+
+    if (rewritten.startsWith('uploads/')) {
+      return `/${rewritten}`;
+    }
+
+    return null;
+  };
+
+  const localPath = toLocalUploadsPath(trimmed);
+  if (localPath) {
+    return new URL(localPath, apiOrigin).toString();
+  }
+
+  // Ex.: "localhost:3001/uploads/x.jpg" -> "/uploads/x.jpg"
+  if (/^(localhost|127\.0\.0\.1):\d+\//i.test(trimmed)) {
     try {
-      const parsed = new URL(rawUrl);
-      if (parsed.hostname === 'localhost') {
-        parsed.hostname = '127.0.0.1';
+      const parsed = new URL(`https://${trimmed}`);
+      const rewrittenPath = toLocalUploadsPath(parsed.pathname);
+      if (rewrittenPath) {
+        return new URL(`${rewrittenPath}${parsed.search}${parsed.hash}`, apiOrigin).toString();
+      }
+      return parsed.toString();
+    } catch {
+      return trimmed;
+    }
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      const rewrittenPath = toLocalUploadsPath(parsed.pathname);
+      if (rewrittenPath) {
+        return new URL(`${rewrittenPath}${parsed.search}${parsed.hash}`, apiOrigin).toString();
       }
       parsed.pathname = rewriteCampaignPath(parsed.pathname);
       return parsed.toString();
     } catch {
-      return rawUrl;
+      return trimmed;
     }
-  };
-
-  // Ex.: "localhost:3001/uploads/x.jpg" -> "https://127.0.0.1:3001/uploads/x.jpg"
-  if (/^localhost:\d+\//i.test(trimmed)) {
-    return normalizeHost(`https://${trimmed}`);
-  }
-
-  if (/^https?:\/\//i.test(trimmed)) {
-    return normalizeHost(trimmed);
   }
 
   try {
-    const apiOrigin = resolveApiOrigin(baseUrl);
     const relativePath = rewriteCampaignPath(trimmed);
-    const absolute = new URL(relativePath, apiOrigin).toString();
-    return normalizeHost(absolute);
+    const localRelativePath = toLocalUploadsPath(relativePath);
+    if (localRelativePath) {
+      return new URL(localRelativePath, apiOrigin).toString();
+    }
+
+    return new URL(relativePath, apiOrigin).toString();
   } catch {
     return trimmed;
   }
+}
+
+export function normalizeUploadedImageUrl(url: string): string {
+  return toAbsoluteImageUrl(url, api.getBaseUrl());
 }
 
 /**
@@ -184,10 +217,21 @@ export async function uploadImage(file: File): Promise<string> {
  */
 export function isValidImageUrl(url: string): boolean {
   if (!url) return false;
-  if (url.startsWith('data:')) return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('data:')) return false;
+
+  // Aceita caminhos locais que serão resolvidos pelo Next/API Gateway.
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/')) {
+    return true;
+  }
+
+  if (/^(localhost|127\.0\.0\.1):\d+\//i.test(trimmed)) {
+    return true;
+  }
   
   try {
-    const parsed = new URL(url);
+    const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    const parsed = new URL(trimmed, base);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch {
     return false;

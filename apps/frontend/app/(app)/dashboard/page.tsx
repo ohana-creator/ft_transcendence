@@ -300,7 +300,7 @@ export default function DashboardPage() {
       setMontante("");
       await fetchWalletData();
     } catch (error: unknown) {
-      const message =
+      const rawMessage =
         typeof error === "object" &&
         error !== null &&
         "message" in error
@@ -308,6 +308,11 @@ export default function DashboardPage() {
             ? (error as { message: string[] }).message.join(" | ")
             : String((error as { message: unknown }).message)
           : "Não foi possível concluir a transferência.";
+
+      const recipientNotFound = /USER_NOT_FOUND|RECIPIENT_USER_NOT_FOUND|RECIPIENT_WALLET_NOT_FOUND|Destinatario invalido ou nao encontrado/i.test(rawMessage);
+      const message = recipientNotFound
+        ? "Destinatário inválido ou não encontrado."
+        : rawMessage;
 
       toast.error("Erro na transferência", message);
     } finally {

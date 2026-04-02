@@ -257,7 +257,19 @@ function CarteiraContent() {
       setTransferNota('');
       await atualizarCarteira();
     } catch (err: unknown) {
-      const message = (err as { message?: string })?.message || t.common.error_get_data;
+      const apiError = err as { status?: number; message?: string | string[] };
+      const rawMessage = Array.isArray(apiError?.message)
+        ? apiError.message[0]
+        : apiError?.message;
+
+      const recipientNotFound =
+        apiError?.status === 404
+        || (typeof rawMessage === 'string' && /USER_NOT_FOUND|RECIPIENT_USER_NOT_FOUND|RECIPIENT_WALLET_NOT_FOUND/i.test(rawMessage));
+
+      const message = recipientNotFound
+        ? 'Destinatario invalido ou nao encontrado.'
+        : (rawMessage || t.common.error_get_data);
+
       setTransferErro(message);
       toast.error(t.common.error, message);
     } finally {

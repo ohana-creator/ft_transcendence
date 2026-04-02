@@ -247,9 +247,30 @@ function transformCampaignToVaquinha(campaigns: Campaign[], options?: { includeP
           return path;
         };
 
+        const toLocalUploadsPath = (path: string): string | null => {
+          const rewritten = rewriteCampaignPath(path);
+
+          if (rewritten.startsWith('/uploads/')) {
+            return rewritten;
+          }
+
+          if (rewritten.startsWith('uploads/')) {
+            return `/${rewritten}`;
+          }
+
+          return null;
+        };
+
+        const localPath = toLocalUploadsPath(trimmed);
+        if (localPath) return localPath;
+
         if (/^https?:\/\//i.test(trimmed)) {
           try {
             const parsed = new URL(trimmed);
+            const rewrittenPath = toLocalUploadsPath(parsed.pathname);
+            if (rewrittenPath) {
+              return `${rewrittenPath}${parsed.search}${parsed.hash}`;
+            }
             parsed.pathname = rewriteCampaignPath(parsed.pathname);
             return parsed.toString();
           } catch {
@@ -258,7 +279,10 @@ function transformCampaignToVaquinha(campaigns: Campaign[], options?: { includeP
         }
 
         try {
-          return new URL(rewriteCampaignPath(trimmed), resolveApiOrigin()).toString();
+          const rewritten = rewriteCampaignPath(trimmed);
+          const localRewritten = toLocalUploadsPath(rewritten);
+          if (localRewritten) return localRewritten;
+          return new URL(rewritten, resolveApiOrigin()).toString();
         } catch {
           return rewriteCampaignPath(trimmed);
         }
@@ -322,9 +346,30 @@ export function useVaquinhaDetalhe(id?: string) {
             return path;
           };
 
+          const toLocalUploadsPath = (path: string): string | null => {
+            const rewritten = rewriteCampaignPath(path);
+
+            if (rewritten.startsWith('/uploads/')) {
+              return rewritten;
+            }
+
+            if (rewritten.startsWith('uploads/')) {
+              return `/${rewritten}`;
+            }
+
+            return null;
+          };
+
+          const localPath = toLocalUploadsPath(trimmed);
+          if (localPath) return localPath;
+
           if (/^https?:\/\//i.test(trimmed)) {
             try {
               const parsed = new URL(trimmed);
+              const rewrittenPath = toLocalUploadsPath(parsed.pathname);
+              if (rewrittenPath) {
+                return `${rewrittenPath}${parsed.search}${parsed.hash}`;
+              }
               parsed.pathname = rewriteCampaignPath(parsed.pathname);
               return parsed.toString();
             } catch {
@@ -333,8 +378,11 @@ export function useVaquinhaDetalhe(id?: string) {
           }
 
           try {
+            const rewritten = rewriteCampaignPath(trimmed);
+            const localRewritten = toLocalUploadsPath(rewritten);
+            if (localRewritten) return localRewritten;
             const apiOrigin = new URL(api.getBaseUrl()).origin;
-            return new URL(rewriteCampaignPath(trimmed), apiOrigin).toString();
+            return new URL(rewritten, apiOrigin).toString();
           } catch {
             return rewriteCampaignPath(trimmed);
           }

@@ -27,7 +27,29 @@ export default function VaquinhaDetalhe({ vaquinha }: VaquinhaDetalheProps) {
   const progresso = meta > 0 ? (arrecadado / meta) * 100 : 0;
   const faltam = meta - arrecadado;
   const placeholderImage = '/assets/placeholder-vaquinha.jpg';
-  const imagem = vaquinha.imagemUrl || placeholderImage;
+
+  const normalizeDisplayImage = (value?: string): string => {
+    if (!value) return placeholderImage;
+
+    const trimmed = value.trim();
+    if (!trimmed) return placeholderImage;
+
+    if (trimmed.startsWith('/uploads/')) {
+      return trimmed;
+    }
+
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.pathname.startsWith('/uploads/')) {
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      return parsed.toString();
+    } catch {
+      return trimmed;
+    }
+  };
+
+  const imagem = normalizeDisplayImage(vaquinha.imagemUrl);
 
   if (IMAGE_DEBUG) {
   }
@@ -35,23 +57,7 @@ export default function VaquinhaDetalhe({ vaquinha }: VaquinhaDetalheProps) {
   return (
     <div className="bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card rounded-2xl shadow-lg overflow-hidden border border-vaks-light-stroke/20 dark:border-vaks-dark-stroke/15">
       {/* Banner da vaquinha */}
-      <div className="relative h-72 sm:h-96 w-full">
-        <img
-          src={imagem}
-          alt={vaquinha.titulo}
-          className="h-full w-full object-cover"
-          loading="lazy"
-          onError={(event) => {
-            if (IMAGE_DEBUG) {
-            }
-
-            // Fallback visual se a URL remota falhar.
-            if (event.currentTarget.src !== window.location.origin + placeholderImage) {
-              event.currentTarget.src = placeholderImage;
-            }
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+      <div className="relative h-72 sm:h-96 w-full bg-gray-400">
       </div>
 
       <div className="p-6 sm:p-8">

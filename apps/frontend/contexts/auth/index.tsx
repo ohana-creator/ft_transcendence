@@ -2,6 +2,12 @@
 
 import { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import { ApiClient, api } from '@/utils/api/api';
+import {
+  DEFAULT_PRIVACY_SETTINGS,
+  PrivacySettings,
+  readMockPrivacySettings,
+  writeMockPrivacySettings,
+} from '@/utils/privacy/mockPrivacy';
 
 const USER_KEY = 'vaks_user';
 const AVATAR_KEY = 'vaks:avatar';
@@ -16,13 +22,6 @@ interface User {
   username: string;
   name?: string;
   avatarUrl?: string;
-}
-
-interface PrivacySettings {
-  profilePublic: boolean;
-  showBalance: boolean;
-  showContributions: boolean;
-  showCampaigns: boolean;
 }
 
 interface AuthContextType {
@@ -115,6 +114,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [privacySettings, setPrivacySettingsState] = useState<PrivacySettings | null>(null);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const setPrivacySettings = useCallback((settings: PrivacySettings | null) => {
+    setPrivacySettingsState(settings);
+
+    if (!settings || !user?.id) return;
+    writeMockPrivacySettings(user.id, settings);
+  }, [user?.id]);
+
   // Enviar heartbeat para manter status online
   const sendHeartbeat = useCallback(async () => {
     if (!ApiClient.isAuthenticated()) return;
@@ -193,25 +199,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(normalizedUser);
 
       if (normalizedUser?.id) {
-        try {
-          const settingsResponse = await api.get<{
-            data?: { privacy?: Partial<PrivacySettings> };
-            privacy?: Partial<PrivacySettings>;
-          }>(`/users/${normalizedUser.id}/settings`);
-
-          const payload = settingsResponse?.data || settingsResponse;
-          const privacy = payload?.privacy;
-          setPrivacySettingsState({
-            profilePublic: privacy?.profilePublic ?? true,
-            showBalance: privacy?.showBalance ?? false,
-            showContributions: privacy?.showContributions ?? true,
-            showCampaigns: privacy?.showCampaigns ?? true,
-          });
-        } catch {
-          setPrivacySettingsState(null);
-        }
+        setPrivacySettingsState(readMockPrivacySettings(normalizedUser.id));
       } else {
-        setPrivacySettingsState(null);
+        setPrivacySettingsState(DEFAULT_PRIVACY_SETTINGS);
       }
     } catch {
       // Não limpar sessão aqui para evitar logout falso por falha transitória.
@@ -236,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUserState(normalized);
             if (normalized) {
               localStorage.setItem(USER_KEY, JSON.stringify(normalized));
+              setPrivacySettingsState(readMockPrivacySettings(normalized.id));
             }
           } catch {
             localStorage.removeItem(USER_KEY);
@@ -248,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const handleAuthLogout = () => {
         setIsAuthenticated(false);
         setUserState(null);
-        setPrivacySettingsState(null);
+        setPrivacySettingsState(DEFAULT_PRIVACY_SETTINGS);
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(AVATAR_KEY);
       };
@@ -301,11 +292,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const normalizedUser = normalizeUserPayload(userData) || normalizeUserPayload(decodeTokenPayload(token));
     if (normalizedUser) {
       setUser(normalizedUser);
-      setPrivacySettingsState(null);
+      setPrivacySettingsState(readMockPrivacySettings(normalizedUser.id));
       void fetchCurrentUser();
       return;
     }
-    setPrivacySettingsState(null);
+    setPrivacySettingsState(DEFAULT_PRIVACY_SETTINGS);
     void fetchCurrentUser();
   }, [fetchCurrentUser, setUser]);
 
@@ -327,7 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     setUser,
     privacySettings,
-    setPrivacySettings: setPrivacySettingsState,
+    setPrivacySettings,
   };
 
   return (
