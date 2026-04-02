@@ -932,14 +932,6 @@ XLEN user.created
 
 ---
 
-## 📞 Contacto & Suporte
-
-### Resources
-
-- **GitHub Issues:** [Reportar bugs](https://github.com/seu-username/ft_transcendence/issues)
-- **Documentação Detalhada:** Ver `/docs` neste repositório
-- **Swagger UI:** Endpoints interativos em `http://localhost:3001/docs`
-
 ### Comum Problemas
 
 | Erro | Solução |
@@ -952,15 +944,6 @@ XLEN user.created
 
 ---
 
-## 📈 Roadmap Futuro
-
-- [ ] 2FA biométrico (WebAuthn)
-- [ ] Multi-signature transactions (blockchain)
-- [ ] Notificações push nativas
-- [ ] Analytics de campanhas
-- [ ] Sistema de reputação de utilizadores
-
----
 
 ## 📄 Licença
 
@@ -968,5 +951,5 @@ Projeto desenvolvido para **42 School** — ft_transcendence
 
 ---
 
-**Última atualização:** 1 de Março de 2026
-**Versão:** 1.0.0 Alpha
+**Última atualização:** 1 de Abril de 2026
+**Versão:** 1.0
