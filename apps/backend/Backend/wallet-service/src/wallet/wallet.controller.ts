@@ -4,7 +4,6 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { InternalServiceGuard } from '../auth/internal-service.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { WalletService } from './wallet.service.js';
-import { TransferDto } from './dto/transfer.dto.js';
 import { InternalDepositDto } from './dto/internal-deposit.dto.js';
 import { TransactionsQueryDto } from './dto/transactions-query.dto.js';
 import { CampaignContributeDto } from './dto/campaign-contribute.dto.js';
@@ -41,7 +40,7 @@ export class WalletController {
   @ApiOperation({ summary: 'Transfer VAKS to another user' })
   async transfer(
     @CurrentUser() user: { userId: string; username?: string },
-    @Body() dto: TransferDto,)
+    @Body() dto: Record<string, unknown>,)
   {
     return this.walletService.transfer(user, dto);
   }

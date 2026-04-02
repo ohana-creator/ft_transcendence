@@ -9,7 +9,7 @@
         status build rebuild migrate push-schema \
         logs-api logs-auth logs-user logs-campaign logs-ledger logs-wallet logs-notification \
         shell-api shell-auth shell-user shell-campaign shell-ledger shell-wallet shell-notification \
-        test health dev prod
+	test health dev prod tls-certs
 
 # Cores para output
 GREEN  := \033[0;32m
@@ -75,6 +75,7 @@ help: ## Mostra esta ajuda
 	@echo "$(GREEN)🔧 DESENVOLVIMENTO:$(NC)"
 	@echo "  make dev             - Inicia em modo desenvolvimento"
 	@echo "  make prod            - Inicia em modo produção"
+	@echo "  make tls-certs       - Gera certificados TLS locais do backend"
 	@echo ""
 
 # ============================================
@@ -106,8 +107,13 @@ health: ## Verifica saúde da API
 	@echo "$(BLUE)🏥 Verificando saúde dos serviços...$(NC)"
 	@echo ""
 	@echo "API Gateway (3000):"
-	@curl -s http://localhost:3000/health | head -c 100 || echo "❌ Não responde"
+	@curl -sk https://localhost:3000/health | head -c 100 || echo "❌ Não responde"
 	@echo ""
+
+tls-certs: ## Gera certificados TLS locais para os serviços backend
+	@echo "$(GREEN)🔐 Gerando certificados TLS locais...$(NC)"
+	@./scripts/generate-backend-tls.sh
+	@echo "$(GREEN)✅ Certificados gerados em secrets/tls$(NC)"
 
 # ============================================
 # BANCO DE DADOS
@@ -298,11 +304,11 @@ test-endpoints: ## Testa endpoints principais
 	@echo "$(BLUE)🧪 Testando endpoints principais...$(NC)"
 	@echo ""
 	@echo "1. Health check (GET /health):"
-	@curl -s -w "  Status: %{http_code}\n" http://localhost:3000/health | head -c 80
+	@curl -sk -w "  Status: %{http_code}\n" https://localhost:3000/health | head -c 80
 	@echo ""
 	@echo ""
 	@echo "2. Invitations pending (GET /invitations/pending):"
-	@curl -s -w "  Status: %{http_code}\n" http://localhost:3000/invitations/pending
+	@curl -sk -w "  Status: %{http_code}\n" https://localhost:3000/invitations/pending
 	@echo ""
 	@echo ""
 	@echo "$(GREEN)✅ Testes concluídos!$(NC)"

@@ -27,7 +27,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className="scroll-smooth" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <head></head>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var noop = function() {};
+                ['log', 'info', 'warn', 'error', 'debug', 'trace', 'dir', 'table', 'group', 'groupEnd', 'groupCollapsed', 'assert', 'count', 'countReset', 'time', 'timeLog', 'timeEnd', 'clear', 'profile', 'profileEnd', 'timeStamp'].forEach(function(m) {
+                  if (console[m]) console[m] = noop;
+                });
+                window.addEventListener('error', function(e) { e.preventDefault(); e.stopPropagation(); return true; }, true);
+                window.addEventListener('unhandledrejection', function(e) { e.preventDefault(); e.stopPropagation(); return true; }, true);
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${sourceSans.variable} font-sans antialiased bg-vaks-light-primary dark:bg-vaks-dark-primary`}>
         <Providers>

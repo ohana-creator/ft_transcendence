@@ -1,5 +1,6 @@
 // components/UserAvatar.tsx
 import Image from "next/image";
+import { useMemo, useState } from "react";
 
 interface UserAvatarProps {
   username: string;
@@ -24,14 +25,36 @@ function getAvatarColor(username: string): string {
 }
 
 export function UserAvatar({ username, avatarUrl, size = 'md' }: UserAvatarProps) {
-  if (avatarUrl) {
+  const [hasError, setHasError] = useState(false);
+
+  const normalizedAvatar = useMemo(() => {
+    if (!avatarUrl) return null;
+
+    const trimmed = avatarUrl.trim();
+    if (!trimmed) return null;
+
+    if (
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('data:') ||
+      trimmed.startsWith('/')
+    ) {
+      return trimmed;
+    }
+
+    return `/${trimmed}`;
+  }, [avatarUrl]);
+
+  if (normalizedAvatar && !hasError) {
     return (
       <div className={`${sizes[size]} relative rounded-full overflow-hidden shrink-0`}>
         <Image
-          src={avatarUrl}
+          src={normalizedAvatar}
           alt={username}
           fill
           className="object-cover"
+          unoptimized={normalizedAvatar.startsWith('data:')}
+          onError={() => setHasError(true)}
         />
       </div>
     );

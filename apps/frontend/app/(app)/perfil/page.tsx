@@ -13,9 +13,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ContributionGraph } from "@/components/profile/contribution-graph";
 import { useI18n } from "@/locales";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
 import { api } from "@/utils/api/api";
 import { getCarteiraData } from "@/utils/wallet";
+import { useWalletBalance } from "@/hooks/react-query";
 
 type WrappedData<T> = T | { data?: T; success?: boolean };
 
@@ -28,8 +30,35 @@ type ProfileApiData = {
   phone?: string;
   username?: string;
   avatarUrl?: string | null;
+  avatar?: string | null;
+  photoUrl?: string | null;
+  image?: string | null;
+  picture?: string | null;
   saldoVaks?: number | string;
 };
+
+type UsersSearchResponse = WrappedData<{
+  users?: Array<{
+    id: string;
+    username: string;
+    name?: string;
+    avatarUrl?: string | null;
+    avatar?: string | null;
+    photoUrl?: string | null;
+    image?: string | null;
+    picture?: string | null;
+  }>;
+  items?: Array<{
+    id: string;
+    username: string;
+    name?: string;
+    avatarUrl?: string | null;
+    avatar?: string | null;
+    photoUrl?: string | null;
+    image?: string | null;
+    picture?: string | null;
+  }>;
+}>;
 
 type CampaignApiItem = {
   id: string;
@@ -60,12 +89,37 @@ type CampaignListApiResponse =
   | { data?: { campaigns?: CampaignApiItem[] } }
   | { data?: CampaignApiItem[] };
 
-type UserStatsApiData = {
-  friendsCount?: number;
-  campaignsCount?: number;
-  contributionsCount?: number;
-  saldoVaks?: number | string;
+type CampaignListApiMeta = {
+  page?: number;
+  pages?: number;
+  total?: number;
+  limit?: number;
 };
+
+type CampaignListPayload = CampaignListApiResponse & {
+  meta?: CampaignListApiMeta;
+};
+
+type FriendsListApiResponse =
+  | { friends?: unknown[]; data?: unknown[] }
+  | unknown[];
+
+type OnlineStatusUser = {
+  id?: string;
+  userId?: string;
+  username?: string;
+  userName?: string;
+  lastSeen?: string;
+  lastHeartbeat?: string;
+};
+
+type OnlineStatusApiResponse =
+  | Record<string, boolean>
+  | { data?: Record<string, boolean> }
+  | { onlineUsers?: OnlineStatusUser[] }
+  | { data?: { onlineUsers?: OnlineStatusUser[] } };
+
+const ONLINE_TIMEOUT_MS = 60 * 1000;
 
 function unwrapData<T>(payload: WrappedData<T>): T {
   if (payload && typeof payload === 'object' && 'data' in payload && payload.data) {
@@ -122,8 +176,161 @@ function extractCampaignMembers(payload: CampaignMembersApiResponse): CampaignMe
   return [];
 }
 
+function extractFriends(payload: FriendsListApiResponse): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  if ('friends' in payload && Array.isArray(payload.friends)) return payload.friends;
+  if ('data' in payload && Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
+function extractUsersFromSearch(payload: UsersSearchResponse): Array<{
+  id: string;
+  username: string;
+  name?: string;
+  avatarUrl?: string | null;
+  avatar?: string | null;
+  photoUrl?: string | null;
+  image?: string | null;
+  picture?: string | null;
+}> {
+  const data = payload as {
+    data?: {
+      users?: Array<{
+        id: string;
+        username: string;
+        name?: string;
+        avatarUrl?: string | null;
+        avatar?: string | null;
+        photoUrl?: string | null;
+        image?: string | null;
+        picture?: string | null;
+      }>;
+      items?: Array<{
+        id: string;
+        username: string;
+        name?: string;
+        avatarUrl?: string | null;
+        avatar?: string | null;
+        photoUrl?: string | null;
+        image?: string | null;
+        picture?: string | null;
+      }>;
+    };
+    users?: Array<{
+      id: string;
+      username: string;
+      name?: string;
+      avatarUrl?: string | null;
+      avatar?: string | null;
+      photoUrl?: string | null;
+      image?: string | null;
+      picture?: string | null;
+    }>;
+    items?: Array<{
+      id: string;
+      username: string;
+      name?: string;
+      avatarUrl?: string | null;
+      avatar?: string | null;
+      photoUrl?: string | null;
+      image?: string | null;
+      picture?: string | null;
+    }>;
+  };
+
+  if (Array.isArray(data.data?.users)) return data.data.users;
+  if (Array.isArray(data.data?.items)) return data.data.items;
+  if (Array.isArray(data.users)) return data.users;
+  if (Array.isArray(data.items)) return data.items;
+  return [];
+}
+
+function resolveAvatarUrl(user: {
+  avatarUrl?: string | null;
+  avatar?: string | null;
+  photoUrl?: string | null;
+  image?: string | null;
+  picture?: string | null;
+} | null | undefined): string | undefined {
+  if (!user) return undefined;
+  return user.avatarUrl || user.avatar || user.photoUrl || user.image || user.picture || undefined;
+}
+
 function normalizeIdentity(value: string | undefined): string {
   return (value || '').trim().replace(/^@/, '').toLowerCase();
+}
+
+function extractOnlineUsers(payload: OnlineStatusApiResponse): OnlineStatusUser[] {
+  if (!payload || typeof payload !== 'object') return [];
+  if ('onlineUsers' in payload && Array.isArray(payload.onlineUsers)) return payload.onlineUsers;
+  if ('data' in payload && payload.data && typeof payload.data === 'object' && Array.isArray(payload.data.onlineUsers)) {
+    return payload.data.onlineUsers;
+  }
+  return [];
+}
+
+function extractOnlineStatusMap(payload: OnlineStatusApiResponse): Record<string, boolean> {
+  if (!payload || typeof payload !== 'object') return {};
+
+  const direct = payload as Record<string, unknown>;
+  const rootBooleans = Object.entries(direct).reduce<Record<string, boolean>>((acc, [key, value]) => {
+    if (typeof value === 'boolean') {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+  if (Object.keys(rootBooleans).length > 0) return rootBooleans;
+
+  if ('data' in payload && payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    const fromData = Object.entries(payload.data as Record<string, unknown>).reduce<Record<string, boolean>>((acc, [key, value]) => {
+      if (typeof value === 'boolean') {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+    if (Object.keys(fromData).length > 0) return fromData;
+  }
+
+  return {};
+}
+
+function isPresenceOnline(lastSeen: string | undefined): boolean {
+  if (!lastSeen) return true;
+  const ts = new Date(lastSeen).getTime();
+  if (Number.isNaN(ts)) return true;
+  return Date.now() - ts <= ONLINE_TIMEOUT_MS;
+}
+
+function resolveOnlineFromList(
+  onlineUsers: OnlineStatusUser[],
+  userId: string | undefined,
+  username: string | undefined,
+): boolean {
+  const normalizedUserId = normalizeIdentity(userId);
+  const normalizedUsername = normalizeIdentity(username);
+
+  const onlineMap = extractOnlineStatusMap({ onlineUsers });
+  if (Object.keys(onlineMap).length > 0) {
+    const mapValue =
+      (userId ? onlineMap[userId] : undefined)
+      ?? (username ? onlineMap[username] : undefined)
+      ?? (normalizedUserId ? onlineMap[normalizedUserId] : undefined)
+      ?? (normalizedUsername ? onlineMap[normalizedUsername] : undefined);
+    if (typeof mapValue === 'boolean') return mapValue;
+  }
+
+  const match = onlineUsers.find((item) => {
+    const itemId = normalizeIdentity(item.id || item.userId);
+    const itemUsername = normalizeIdentity(item.username || item.userName);
+    return (
+      (!!normalizedUserId && !!itemId && normalizedUserId === itemId)
+      || (!!normalizedUsername && !!itemUsername && normalizedUsername === itemUsername)
+    );
+  });
+
+  if (!match) return false;
+  return isPresenceOnline(match.lastSeen || match.lastHeartbeat);
 }
 
 function normalizeDobForInput(dob: string | undefined): string {
@@ -406,7 +613,7 @@ const PROGRESS_COLOR = {
   encerrada: "bg-gray-300 dark:bg-gray-600",
   meta_atingida: "bg-amber-400 dark:bg-amber-500",
 };
-function VaquinhasCard({ vaquinhas }: { vaquinhas: UserVaquinha[] }) {
+function VaquinhasCard({ vaquinhas, loading = false }: { vaquinhas: UserVaquinha[]; loading?: boolean }) {
   const [sortKey, setSortKey] = useState<"name" | "meta" | "arrecadado" | "status" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const { t } = useI18n();
@@ -472,7 +679,16 @@ function VaquinhasCard({ vaquinhas }: { vaquinhas: UserVaquinha[] }) {
         </div>
       </div>
 
-      {vaquinhas.length === 0 && (
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-vaks-light-input dark:bg-vaks-dark-input flex items-center justify-center animate-pulse">
+            <HandCoins className="h-5 w-5 text-vaks-light-alt-txt/40 dark:text-vaks-dark-alt-txt/40" />
+          </div>
+          <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">{t.common.loading}</p>
+        </div>
+      )}
+
+      {!loading && vaquinhas.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-12 h-12 rounded-2xl bg-vaks-light-input dark:bg-vaks-dark-input flex items-center justify-center">
             <Users className="h-5 w-5 text-vaks-light-alt-txt/40 dark:text-vaks-dark-alt-txt/40" />
@@ -481,7 +697,7 @@ function VaquinhasCard({ vaquinhas }: { vaquinhas: UserVaquinha[] }) {
         </div>
       )}
 
-      {vaquinhas.length > 0 && (
+      {!loading && vaquinhas.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-0">
             <thead>
@@ -591,14 +807,44 @@ export default function ProfilePage() {
   const { t } = useI18n();
   const { user, setUser } = useAuth();
   const profile = t.perfil;
+  const gs = t.dashboard.global_search;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFriendsModalOpen, setIsFriendsModalOpen] = useState(false);
   const [userVaquinhas, setUserVaquinhas] = useState<UserVaquinha[]>([]);
+  const [isOnline, setIsOnline] = useState(true);
   const [statsData, setStatsData] = useState({
     saldo: 0,
     vaquinhas: 0,
     contribuicoes: 0,
     amigos: 0,
+  });
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const onlineStatusUnavailableRef = useRef(false);
+
+  const { data: walletBalanceData } = useWalletBalance();
+
+  const { data: friendsCountData } = useQuery({
+    queryKey: ['friends', 'count'],
+    queryFn: async () => {
+      const response = await api.get<FriendsListApiResponse>('/friends');
+      return extractFriends(response).length;
+    },
+    enabled: !!user?.id,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: contributionsCountData } = useQuery({
+    queryKey: ['profile', 'contributions-count', user?.id],
+    queryFn: async () => {
+      const carteira = await getCarteiraData();
+      return (carteira.transacoes || []).filter((tx) => tx.tipo === 'contribuicao').length;
+    },
+    enabled: !!user?.id,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   type ProfileStat = {
@@ -626,169 +872,269 @@ export default function ProfilePage() {
 
     let cancelled = false;
 
-    const loadProfileMetrics = async () => {
+    const loadOnlineStatus = async () => {
+      if (onlineStatusUnavailableRef.current) {
+        setIsOnline(true);
+        return;
+      }
+
       try {
-        const [profileResponse, statsResponse, carteiraData, campaignsResponse] = await Promise.all([
-          api.get<WrappedData<ProfileApiData>>(`/users/${user.id}`).catch(() => null),
-          api.get<WrappedData<UserStatsApiData>>('/users/me/stats').catch(() => null),
-          getCarteiraData().catch(() => null),
-          api.get<CampaignListApiResponse>('/campaigns', {
-            params: { limit: 100 },
-          }).catch(() => ({ campaigns: [] })),
-        ]);
+        const response = await api.get<OnlineStatusApiResponse>('/users/online-status', {
+          params: { limit: 500 },
+        });
 
         if (cancelled) return;
 
-        const profileData = profileResponse ? unwrapData(profileResponse) : null;
-        const stats = statsResponse ? unwrapData(statsResponse) : null;
-        const allCampaigns = extractCampaigns(campaignsResponse);
-        const normalizedCurrentUserId = normalizeIdentity(user.id);
-        const normalizedCurrentUsername = normalizeIdentity(user.username);
-        const isSameUser = (candidateId?: string, candidateUsername?: string): boolean => {
-          const normalizedCandidateId = normalizeIdentity(candidateId);
-          const normalizedCandidateUsername = normalizeIdentity(candidateUsername);
+        const onlineUsers = extractOnlineUsers(response);
+        const onlineMap = extractOnlineStatusMap(response);
+        const normalizedId = normalizeIdentity(user.id);
+        const normalizedUsername = normalizeIdentity(user.username);
+        const legacyValue =
+          onlineMap[user.id]
+          ?? (user.username ? onlineMap[user.username] : undefined)
+          ?? (normalizedId ? onlineMap[normalizedId] : undefined)
+          ?? (normalizedUsername ? onlineMap[normalizedUsername] : undefined);
 
-          const match: boolean =
-            (!!normalizedCurrentUserId && !!normalizedCandidateId && normalizedCurrentUserId === normalizedCandidateId) ||
-            (!!normalizedCurrentUsername && !!normalizedCandidateUsername && normalizedCurrentUsername === normalizedCandidateUsername);
+        if (typeof legacyValue === 'boolean') {
+          setIsOnline(legacyValue);
+        } else {
+          setIsOnline(resolveOnlineFromList(onlineUsers, user.id, user.username));
+        }
+      } catch (error: unknown) {
+        const apiError = error as { status?: number };
+        if (apiError?.status === 404) {
+          onlineStatusUnavailableRef.current = true;
+        }
 
-          if (match || candidateId || candidateUsername) {
+        if (!cancelled) {
+          setIsOnline(true);
+        }
+      }
+    };
+
+    loadOnlineStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.username]);
+
+  useEffect(() => {
+    const normalizedUserId = normalizeIdentity(user?.id);
+    const normalizedUsername = normalizeIdentity(user?.username);
+
+    if (!normalizedUserId && !normalizedUsername) {
+      setUserVaquinhas([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const isCurrentUser = (candidateId?: string, candidateUsername?: string): boolean => {
+      const normalizedCandidateId = normalizeIdentity(candidateId);
+      const normalizedCandidateUsername = normalizeIdentity(candidateUsername);
+
+      return (
+        (!!normalizedUserId && !!normalizedCandidateId && normalizedUserId === normalizedCandidateId) ||
+        (!!normalizedUsername && !!normalizedCandidateUsername && normalizedUsername === normalizedCandidateUsername)
+      );
+    };
+
+    const resolveRoleFromMember = (memberRole?: string): VaquinhaRole => {
+      if (memberRole === 'SUDO') return 'administrador';
+      return 'membro';
+    };
+
+    const toCreatedLabel = (createdAt?: string): string => {
+      if (!createdAt) return '';
+      const date = new Date(createdAt);
+      if (Number.isNaN(date.getTime())) return '';
+      return new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(date);
+    };
+
+    const fetchCampaignsForProfile = async () => {
+      setCampaignsLoading(true);
+
+      try {
+        const allCampaigns: CampaignApiItem[] = [];
+        let currentPage = 1;
+        let totalPages = 1;
+
+        do {
+          const response = await api.get<CampaignListPayload>('/campaigns', {
+            params: {
+              page: currentPage,
+              limit: 50,
+            },
+          });
+
+          const pageCampaigns = extractCampaigns(response);
+          allCampaigns.push(...pageCampaigns);
+
+          const responsePages = response?.meta?.pages;
+          if (typeof responsePages === 'number' && responsePages > 0) {
+            totalPages = responsePages;
+          } else if (pageCampaigns.length < 50) {
+            totalPages = currentPage;
+          } else {
+            totalPages = currentPage + 1;
           }
 
-          return match;
-        };
+          currentPage += 1;
+        } while (currentPage <= totalPages);
 
-        const membersByCampaign = new Map<string, CampaignMemberApiItem[]>();
+        const mapped = await Promise.all(allCampaigns.map(async (campaign) => {
+          const ownerMatch = isCurrentUser(campaign.ownerId, campaign.ownerUsername);
 
-        allCampaigns.forEach((campaign) => {
-          if (Array.isArray(campaign.members) && campaign.members.length > 0) {
-            membersByCampaign.set(campaign.id, campaign.members);
-          }
-        });
+          let role: VaquinhaRole | null = ownerMatch ? 'criador' : null;
+          let membersCount = campaign._count?.members;
 
-        const campaignsWithoutMembersLoaded = allCampaigns.filter((campaign) => {
-          if (isSameUser(campaign.ownerId, campaign.ownerUsername)) {
-            return false;
-          }
-          return !membersByCampaign.has(campaign.id);
-        });
+          if (!ownerMatch) {
+            const inlineMembers = Array.isArray(campaign.members) ? campaign.members : [];
+            const inlineMember = inlineMembers.find((member) => isCurrentUser(member.userId, member.username));
 
-        // Limitar requisições paralelas para evitar sobrecarga
-        const batchSize = 5;
-        for (let i = 0; i < campaignsWithoutMembersLoaded.length; i += batchSize) {
-          const batch = campaignsWithoutMembersLoaded.slice(i, i + batchSize);
-          const membersRequests = await Promise.all(
-            batch.map(async (campaign) => {
+            if (inlineMembers.length > 0 && typeof membersCount !== 'number') {
+              membersCount = inlineMembers.length;
+            }
+
+            if (inlineMember) {
+              role = resolveRoleFromMember(inlineMember.role);
+            } else {
               try {
-                const response = await api.get<CampaignMembersApiResponse>(`/campaigns/${campaign.id}/members`, {
+                const membersResponse = await api.get<CampaignMembersApiResponse>(`/campaigns/${campaign.id}/members`, {
                   params: { page: 1, limit: 100 },
                 });
-                return { campaignId: campaign.id, members: extractCampaignMembers(response) };
-              } catch (err) {
-                // Falha silenciosa, continua
-                return { campaignId: campaign.id, members: [] as CampaignMemberApiItem[] };
-              }
-            })
-          );
+                const members = extractCampaignMembers(membersResponse);
+                membersCount = members.length || membersCount;
 
-          membersRequests.forEach(({ campaignId, members }) => {
-            if (!membersByCampaign.has(campaignId)) {
-              membersByCampaign.set(campaignId, members);
-            }
-          });
-        }
-
-        // Verificar quais campanhas ainda precisam de detalhes completos
-        const campaignsNeedingDetails = allCampaigns.filter((campaign) => {
-          const hasOwnerInfo = campaign.ownerId || campaign.ownerUsername;
-          const hasMembers = membersByCampaign.has(campaign.id) || (Array.isArray(campaign.members) && campaign.members.length > 0);
-          return !hasOwnerInfo && !hasMembers;
-        });
-
-        // Buscar detalhes completos se necessário
-        if (campaignsNeedingDetails.length > 0) {
-          const detailsRequests = await Promise.all(
-            campaignsNeedingDetails.map(async (campaign) => {
-              try {
-                const response = await api.get<WrappedData<CampaignApiItem>>(`/campaigns/${campaign.id}`);
-                const details = unwrapData(response);
-                return details;
+                const foundMember = members.find((member) => isCurrentUser(member.userId, member.username));
+                if (foundMember) {
+                  role = resolveRoleFromMember(foundMember.role);
+                }
               } catch {
-                return null;
-              }
-            })
-          );
-
-          detailsRequests.forEach((details, index) => {
-            if (details && campaignsNeedingDetails[index]) {
-              // Atualizar campanha com detalhes completos
-              const idx = allCampaigns.findIndex(c => c.id === campaignsNeedingDetails[index].id);
-              if (idx >= 0) {
-                allCampaigns[idx] = { ...allCampaigns[idx], ...details };
+                // Se não conseguir listar membros, mantém a campanha fora da tabela para evitar dados incorretos.
               }
             }
-          });
-        }
-        const mine = allCampaigns.filter((campaign) => {
-          const isOwner = isSameUser(campaign.ownerId, campaign.ownerUsername);
-          const campaignMembers = membersByCampaign.get(campaign.id) || campaign.members || [];
-          const isMember = Array.isArray(campaignMembers) && campaignMembers.some((member) => isSameUser(member?.userId, member?.username));
-          return isOwner || isMember;
-        });
-        const mappedCampaigns: UserVaquinha[] = mine.map((campaign) => {
+          }
+
+          if (!role) return null;
+
           const goal = toNumber(campaign.goalAmount);
           const current = toNumber(campaign.currentAmount);
-          const date = campaign.createdAt ? new Date(campaign.createdAt) : null;
-          const createdLabel = date
-            ? new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(date)
-            : '';
 
           return {
             id: campaign.id,
             name: campaign.title || 'Vaquinha',
             icon: pickVaquinhaIcon(campaign.id),
-            role: (() => {
-              if (isSameUser(campaign.ownerId, campaign.ownerUsername)) {
-                return 'criador' as const;
-              }
-
-              const campaignMembers = membersByCampaign.get(campaign.id) || campaign.members || [];
-              const me = campaignMembers.find((member) => isSameUser(member.userId, member.username));
-              if (me?.role === 'SUDO') {
-                return 'administrador' as const;
-              }
-              return 'membro' as const;
-            })(),
+            role,
             meta: goal > 0 ? goal : current,
             arrecadado: current,
             status: campaignStatusToProfileStatus(campaign.status),
-            membros: campaign._count?.members || campaign.members?.length || 1,
-            criadaEm: createdLabel,
-          };
-        });
-        const contributionCount = stats?.contributionsCount
-          ?? (carteiraData?.transacoes || []).filter((tx) => tx.tipo === 'contribuicao').length;
-        const resolvedSaldo = toNumber(stats?.saldoVaks) || carteiraData?.saldo || toNumber(profileData?.saldoVaks);
-        const resolvedFriendsCount = stats?.friendsCount ?? 0;
-        setUserVaquinhas(mappedCampaigns);
-        setStatsData({
-          saldo: resolvedSaldo,
-          vaquinhas: stats?.campaignsCount ?? mappedCampaigns.length,
-          contribuicoes: contributionCount,
-          amigos: resolvedFriendsCount,
-        });
+            membros: typeof membersCount === 'number' ? membersCount : 1,
+            criadaEm: toCreatedLabel(campaign.createdAt),
+          } satisfies UserVaquinha;
+        }));
+
+        if (cancelled) return;
+
+        setUserVaquinhas(mapped.filter((item): item is UserVaquinha => item !== null));
+      } catch {
+        if (cancelled) return;
+        setUserVaquinhas([]);
+      } finally {
+        if (cancelled) return;
+        setCampaignsLoading(false);
+      }
+    };
+
+    fetchCampaignsForProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.username]);
+
+  useEffect(() => {
+    if (typeof walletBalanceData?.balance !== 'number') return;
+
+    setStatsData((prev) => {
+      if (prev.saldo === walletBalanceData.balance) return prev;
+      return { ...prev, saldo: walletBalanceData.balance };
+    });
+  }, [walletBalanceData?.balance]);
+
+  useEffect(() => {
+    if (typeof friendsCountData !== 'number') return;
+
+    setStatsData((prev) => {
+      if (prev.amigos === friendsCountData) return prev;
+      return { ...prev, amigos: friendsCountData };
+    });
+  }, [friendsCountData]);
+
+  useEffect(() => {
+    setStatsData((prev) => {
+      if (prev.vaquinhas === userVaquinhas.length) return prev;
+      return { ...prev, vaquinhas: userVaquinhas.length };
+    });
+  }, [userVaquinhas.length]);
+
+  useEffect(() => {
+    if (typeof contributionsCountData !== 'number') return;
+
+    setStatsData((prev) => {
+      if (prev.contribuicoes === contributionsCountData) return prev;
+      return { ...prev, contribuicoes: contributionsCountData };
+    });
+  }, [contributionsCountData]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let cancelled = false;
+
+    const loadProfileMetrics = async () => {
+      try {
+        const [profileResponse, searchResponse] = await Promise.all([
+          api.get<WrappedData<ProfileApiData>>(`/users/${user.id}`).catch(() => null),
+          user.username
+            ? api.get<UsersSearchResponse>('/users/search', {
+              params: { q: user.username, page: 1, limit: 10 },
+            }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
+        if (cancelled) return;
+
+        const profileData = profileResponse ? unwrapData(profileResponse) : null;
+        const searchUsers = searchResponse ? extractUsersFromSearch(searchResponse) : [];
+        const exactUser = searchUsers.find(
+          (item) => normalizeIdentity(item.username) === normalizeIdentity(user.username),
+        );
+        const resolvedAvatar = resolveAvatarUrl(exactUser) || resolveAvatarUrl(profileData);
+        const resolvedSaldo = toNumber(profileData?.saldoVaks);
+
+        if (resolvedSaldo > 0) {
+          setStatsData((prev) => ({
+            ...prev,
+            saldo: resolvedSaldo,
+          }));
+        }
 
         setData((prev) => ({
           ...prev,
           dob: normalizeDobForInput(profileData?.dob) || prev.dob,
           email: profileData?.email || prev.email,
           phone: profileData?.phone || prev.phone,
-          username: profileData?.username || prev.username,
-          avatarUrl: prev.avatarUrl || profileData?.avatarUrl || undefined,
+          username: exactUser?.username || profileData?.username || prev.username,
+          avatarUrl: prev.avatarUrl || resolvedAvatar || undefined,
         }));
+
+        if (resolvedAvatar && user && user.avatarUrl !== resolvedAvatar) {
+          setUser({ ...user, avatarUrl: resolvedAvatar });
+        }
       } catch {
         if (cancelled) return;
-        setUserVaquinhas([]);
       }
     };
 
@@ -797,7 +1143,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, user?.username]);
+  }, [user, user?.id, user?.username, setUser]);
 
   // Quando o backend estiver pronto, substitui esta função por um fetch POST /api/user/avatar
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -966,6 +1312,16 @@ export default function ProfilePage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Pro
                 </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    isOnline
+                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                      : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                  {isOnline ? gs.online : gs.offline}
+                </span>
               </div>
               <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt flex items-center gap-1.5">
                 {data.email}
@@ -981,7 +1337,7 @@ export default function ProfilePage() {
       <div className="px-4 sm:px-8 py-4 sm:py-6 flex flex-col gap-6">
         <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-12">
           <motion.div
-            className="h-full w-full min-h-[300px] xl:col-span-6"
+            className="h-full w-full min-h-75 xl:col-span-6"
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.4 }}>
             <UserCard
@@ -995,19 +1351,11 @@ export default function ProfilePage() {
               }}
             />
           </motion.div>
-          <motion.div
-            className="h-full w-full min-h-[300px] xl:col-span-6"
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.38, duration: 0.4 }}>
-            <div className="h-full">
-              <ContributionGraph />
-            </div>
-          </motion.div>
         </div>
         <motion.div
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.46, duration: 0.4 }}>
-          <VaquinhasCard vaquinhas={userVaquinhas} />
+          <VaquinhasCard vaquinhas={userVaquinhas} loading={campaignsLoading} />
         </motion.div>
       </div>
 

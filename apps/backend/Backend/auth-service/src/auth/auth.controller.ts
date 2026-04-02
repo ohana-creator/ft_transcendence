@@ -25,6 +25,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { TwoFACodeDto } from './dto/two-fa-code.dto';
 import { TwoFAValidateDto } from './dto/two-fa-validate.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   Request2FAEmailDto,
   Validate2FAEmailDto,
@@ -121,6 +122,21 @@ export class AuthController {
     return this.authService.getMe(user.userId);
   }
 
+  @Post('change-password')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change current user password' })
+  @ApiResponse({ status: 200, description: 'Password updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid password data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized or invalid current password' })
+  @ApiBody({ type: ChangePasswordDto })
+  async changePassword(
+    @CurrentUser() user: { userId: string },
+    @Body() body: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(user.userId, body.currentPassword, body.newPassword);
+  }
+
   // ── 2FA: Setup ─────────────────────────────────────────
 
   @Post('2fa/setup')
@@ -211,7 +227,7 @@ export class AuthController {
   @Get('google/callback')
   @ApiOperation({ summary: 'Google OAuth callback — exchanges code for token' })
   async googleCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://localhost:3001';
     
     try {
       const { code, state, error } = req.query;
@@ -305,7 +321,7 @@ export class AuthController {
   @Get('42/callback')
   @ApiOperation({ summary: '42 OAuth callback — exchanges code for token' })
   async fortyTwoCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://localhost:3001';
     
     try {
       const fortyTwoConfig = this.secretsService.getFortyTwoConfig();
@@ -400,7 +416,7 @@ export class AuthController {
   @Get('facebook/callback')
   @ApiOperation({ summary: 'Facebook OAuth callback — exchanges code for token' })
   async facebookCallback(@Req() req: any, @Res({ passthrough: true }) reply) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://localhost:3001';
     
     try {
       const facebookConfig = this.secretsService.getFacebookConfig();

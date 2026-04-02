@@ -175,6 +175,29 @@ npm run build
 npm start
 ```
 
+## 🐳 Docker
+
+O frontend já pode ser executado em container de produção.
+
+```bash
+# Build da imagem local
+docker build -t vaks-frontend .
+
+# Subir o frontend junto com o backend existente
+cd ../backend
+docker compose up --build frontend
+```
+
+Depois disso, o frontend fica disponível em `http://localhost:3001`.
+
+### Desenvolvimento com hot reload
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Este modo monta o código da pasta atual, mantém `node_modules` no volume do container e liga o frontend ao backend que estiver exposto no host em `http://localhost:3000`.
+
 ## 🤝 Contribuindo
 
 Este é o frontend do projeto VAKS (Pessoa 2). Para contribuir:

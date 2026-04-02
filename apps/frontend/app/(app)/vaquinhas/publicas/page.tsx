@@ -116,8 +116,11 @@ interface AvatarStackProps {
 }
 
 function AvatarStack({ contribuidores, max = 5 }: AvatarStackProps) {
+  const { t } = useI18n();
+  const hb = t.vaquinhas.hub;
   const visibleAvatars = contribuidores.slice(0, max);
   const remaining = contribuidores.length - max;
+  const contributorLabel = contribuidores.length === 1 ? hb.contribuidor : hb.contribuidores;
 
   const colors = [
     "from-rose-400 to-pink-500",
@@ -156,7 +159,7 @@ function AvatarStack({ contribuidores, max = 5 }: AvatarStackProps) {
         )}
       </div>
       <span className="ml-3 text-xs text-white/50">
-        {contribuidores.length} contribuidores
+        {contribuidores.length} {contributorLabel}
       </span>
     </div>
   );
@@ -172,32 +175,31 @@ function ProgressRing({
 }) {
   const strokeWidth = 4;
   const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (percent / 100) * circumference;
+  const center = size / 2;
+  const clampedPercent = Math.min(Math.max(percent, 0), 100) / 100;
+  const progressPath = `M ${center} ${center - radius} a ${radius} ${radius} 0 1 1 0 ${radius * 2} a ${radius} ${radius} 0 1 1 0 ${-radius * 2}`;
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={center}
+          cy={center}
           r={radius}
           stroke="currentColor"
           strokeWidth={strokeWidth}
           fill="none"
           className="text-white/5"
         />
-        <motion.circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
+        <motion.path
+          d={progressPath}
           stroke="url(#progressGradient)"
           strokeWidth={strokeWidth}
           fill="none"
           strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
+          pathLength={clampedPercent}
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: clampedPercent }}
           transition={{ duration: 1.2, ease: "easeOut" }}
         />
         <defs>

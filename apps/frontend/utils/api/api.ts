@@ -17,7 +17,6 @@ export interface RequestOptions {
 }
 
 const TOKEN_KEY = 'vaks_access_token';
-
 export class ApiClient {
   private baseUrl: string;
 
@@ -192,7 +191,7 @@ export class ApiClient {
     } as T;
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
+  private async handleResponse<T>(response: Response, context?: { method?: string; url?: string }): Promise<T> {
     if (!response.ok) {
       let errorData: ApiError = {
         status: response.status,
@@ -213,6 +212,8 @@ export class ApiClient {
       } catch {
         // Response body not JSON
       }
+
+      // Error already tracked
 
       // Handle 401 - token expired/invalid
       if (response.status === 401) {
@@ -246,7 +247,7 @@ export class ApiClient {
       headers: this.buildHeaders(options, false),
       signal: options?.signal,
     });
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'GET', url });
   }
 
   async post<T = unknown>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
@@ -261,7 +262,7 @@ export class ApiClient {
       body: data ? JSON.stringify(data) : undefined,
       signal: options?.signal,
     });
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'POST', url });
   }
 
   async put<T = unknown>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
@@ -276,7 +277,7 @@ export class ApiClient {
       body: data ? JSON.stringify(data) : undefined,
       signal: options?.signal,
     });
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'PUT', url });
   }
 
   async patch<T = unknown>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
@@ -291,7 +292,7 @@ export class ApiClient {
       body: data ? JSON.stringify(data) : undefined,
       signal: options?.signal,
     });
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'PATCH', url });
   }
 
   async delete<T = unknown>(endpoint: string, options?: RequestOptions): Promise<T> {
@@ -305,7 +306,7 @@ export class ApiClient {
       headers: this.buildHeaders(options, false),
       signal: options?.signal,
     });
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, { method: 'DELETE', url });
   }
 }
 

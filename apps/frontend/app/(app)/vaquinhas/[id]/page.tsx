@@ -7,7 +7,7 @@
 
 'use client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Trash2, Edit3, Users, Mail, X } from 'lucide-react';
 import { useVaquinhaDetalhe } from '@/hooks/vaquinhas';
@@ -48,6 +48,7 @@ export default function VaquinhaPage({
   const [isInviting, setIsInviting] = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [members, setMembers] = useState<CampaignMember[]>([]);
+  const [redirectingToPrivate, setRedirectingToPrivate] = useState(false);
 
   // Extrair user ID do token JWT
   const getUserIdFromToken = (): string | null => {
@@ -129,7 +130,6 @@ export default function VaquinhaPage({
         router.push('/vaquinhas');
       }, 1500);
     } catch (err: unknown) {
-      console.error('Delete error:', err);
       toast.error(t.campaign_detail.error_deleting, getErrorMessage(err, t.campaign_detail.error_deleting_desc));
       toast.error('Erro ao eliminar', getErrorMessage(err, 'Não foi possível eliminar a vaquinha'));
       setIsDeletingLoading(false);
@@ -137,7 +137,30 @@ export default function VaquinhaPage({
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    if (loading || vaquinha || redirectingToPrivate) return;
+    if (!error) return;
+
+    // Se for erro de autenticação, redirecionar para login
+    if (error === 'unauthorized') {
+      router.replace('/login');
+      return;
+    }
+
+    setRedirectingToPrivate(true);
+    router.replace(`/vaquinhas/privadas/${id}`);
+  }, [loading, vaquinha, error, redirectingToPrivate, router, id]);
+
+  if (loading || redirectingToPrivate) {
+    return (
+      <div className="min-h-screen bg-vaks-light-primary dark:bg-vaks-dark-primary flex items-center justify-center">
+        <p>{t.vaquinhas.detalhe.carregando}</p>
+      </div>
+    );
+  }
+
+  // Se for erro de autenticação, mostramos carregando enquanto redireciona
+  if (error === 'unauthorized') {
     return (
       <div className="min-h-screen bg-vaks-light-primary dark:bg-vaks-dark-primary flex items-center justify-center">
         <p>{t.vaquinhas.detalhe.carregando}</p>
@@ -221,8 +244,10 @@ export default function VaquinhaPage({
                     newAmount,
                   });
 
-                  // Refetch da campanha e contribuições para manter consistência com backend
-                  refetch?.();
+                  // Evita sobrescrever a atualização otimista com dados ainda não propagados no backend.
+                  setTimeout(() => {
+                    refetch?.();
+                  }, 1500);
                 }}
               />
             </div>

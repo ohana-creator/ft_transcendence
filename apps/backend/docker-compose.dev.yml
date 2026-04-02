@@ -32,13 +32,16 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
-      AUTH_SERVICE_URL: http://auth-service:3001
-      CAMPAIGN_SERVICE_URL: http://campaign-service:3002
-      NOTIFICATION_SERVICE_URL: http://notification-service:3003
-      USER_SERVICE_URL: http://user-service:3004
-      WALLET_SERVICE_URL: http://wallet-service:3005
-      LEDGER_SERVICE_URL: http://ledger-service:3006
+      AUTH_SERVICE_URL: https://auth-service:3001
+      CAMPAIGN_SERVICE_URL: https://campaign-service:3002
+      NOTIFICATION_SERVICE_URL: https://notification-service:3003
+      USER_SERVICE_URL: https://user-service:3004
+      WALLET_SERVICE_URL: https://wallet-service:3005
+      LEDGER_SERVICE_URL: https://ledger-service:3006
+      HTTPS_REQUIRED: "false"
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
       - ./Backend/api-gateway/src:/app/src
       - ./Backend/api-gateway/test:/app/test
       - ./Backend/api-gateway/tsconfig.json:/app/tsconfig.json
@@ -97,15 +100,20 @@ services:
       REDIS_PASSWORD: change_me
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_CALLBACK_URL: http://localhost:3000/auth/google/callback
+      GOOGLE_CALLBACK_URL: https://localhost:3000/auth/google/callback
       FORTYTWO_CLIENT_ID: ${FORTYTWO_CLIENT_ID:-}
       FORTYTWO_CLIENT_SECRET: ${FORTYTWO_CLIENT_SECRET:-}
-      FORTYTWO_CALLBACK_URL: http://localhost:3000/auth/42/callback
+      FORTYTWO_CALLBACK_URL: https://localhost:3000/auth/42/callback
       FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
       FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
-      FACEBOOK_CALLBACK_URL: http://localhost:3000/auth/facebook/callback
-      FRONTEND_URL: http://localhost:3000
+      FACEBOOK_CALLBACK_URL: https://localhost:3000/auth/facebook/callback
+      FRONTEND_URL: https://localhost:3000
+      HTTPS_REQUIRED: "true"
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
       - ./Backend/auth-service/src:/app/src
       - ./Backend/auth-service/test:/app/test
       - ./Backend/auth-service/prisma:/app/prisma
@@ -164,17 +172,22 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
       JWT_SECRET: change_me
-      WALLET_SERVICE_URL: http://wallet-service:3005
+      WALLET_SERVICE_URL: https://wallet-service:3005
       INTERNAL_API_KEY: change_me_internal
       CAMPAIGN_IMAGE_STORAGE: local
       CAMPAIGN_UPLOADS_DIR: /app/uploads
-      CAMPAIGN_PUBLIC_BASE_URL: http://localhost:3000
+      CAMPAIGN_PUBLIC_BASE_URL: https://localhost:3000
       R2_ENDPOINT: ${R2_ENDPOINT:-https://your-account-id.r2.cloudflarestorage.com}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-change_me}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-change_me}
       R2_BUCKET: ${R2_BUCKET:-vaks-campaigns}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-https://pub-xxx.r2.dev}
+      HTTPS_REQUIRED: "true"
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
       - ./Backend/campaign-service/src:/app/src
       - ./Backend/campaign-service/test:/app/test
       - ./Backend/campaign-service/prisma:/app/prisma
@@ -235,7 +248,12 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
       JWT_SECRET: change_me
+      HTTPS_REQUIRED: "true"
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
       - ./Backend/notification-service/src:/app/src
       - ./Backend/notification-service/test:/app/test
       - ./Backend/notification-service/prisma:/app/prisma
@@ -295,13 +313,18 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
       JWT_SECRET: change_me
-      WALLET_SERVICE_URL: http://wallet-service:3005
+      WALLET_SERVICE_URL: https://wallet-service:3005
       R2_ENDPOINT: ${R2_ENDPOINT:-https://your-account-id.r2.cloudflarestorage.com}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-change_me}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-change_me}
       R2_BUCKET: ${R2_BUCKET:-vaks-avatars}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-https://pub-xxx.r2.dev}
+      HTTPS_REQUIRED: "true"
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
       - ./Backend/user-service/src:/app/src
       - ./Backend/user-service/test:/app/test
       - ./Backend/user-service/prisma:/app/prisma
@@ -361,11 +384,16 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: change_me
-      USER_SERVICE_URL: http://user-service:3004
+      USER_SERVICE_URL: https://user-service:3004
       INTERNAL_API_KEY: change_me_internal
-      FRONTEND_URL: http://localhost:3001
+      FRONTEND_URL: https://localhost:3001
       TOPUP_CHECKOUT_PATH: /carteira/carregar
+      HTTPS_REQUIRED: "true"
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
       - ./Backend/wallet-service/src:/app/src
       - ./Backend/wallet-service/test:/app/test
       - ./Backend/wallet-service/prisma:/app/prisma
@@ -428,7 +456,12 @@ services:
       AVALANCHE_RPC_URL: ${AVALANCHE_RPC_URL:-https://api.avax-test.network/ext/bc/C/rpc}
       VAKS_CONTRACT_ADDRESS: ${VAKS_CONTRACT_ADDRESS:-0xc719E0b1488056FF848D5af73910C18b3A83a1e0}
       ADMIN_PRIVATE_KEY: ${ADMIN_PRIVATE_KEY:-0x0000000000000000000000000000000000000000000000000000000000000000}
+      HTTPS_REQUIRED: "true"
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
       - ./Backend/ledger-service/src:/app/src
       - ./Backend/ledger-service/prisma:/app/prisma
       - ./Backend/ledger-service/tsconfig.json:/app/tsconfig.json

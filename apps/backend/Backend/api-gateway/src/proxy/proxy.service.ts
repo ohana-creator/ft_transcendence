@@ -48,7 +48,7 @@ export class ProxyService {
     // Construir URL destino: base do serviço + path + query string original
     // Rotas internas do microserviço (health, docs/swagger) vivem sem o
     // prefixo do gateway — é necessário reescrever o path.
-    const requestUrl = new URL(req.url, 'http://gateway.local');
+    const requestUrl = new URL(req.url, 'https://gateway.local');
     const correlationId = this.getCorrelationId(req);
     const userId = this.extractUserId(req.headers.authorization);
     const startedAt = Date.now();

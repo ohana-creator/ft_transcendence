@@ -96,9 +96,16 @@ export async function contributeToCampaign(
   campaignId: string,
   payload: ContributePayload
 ): Promise<ContributeResponse> {
+  const requestPayload = {
+    amount: payload.amount,
+    message: payload.message,
+    isAnonymous: payload.isAnonymous,
+    anonimo: payload.isAnonymous,
+  };
+
   return campaignsApi.post<ContributeResponse>(
     `/campaigns/${campaignId}/contribute`,
-    payload
+    requestPayload
   );
 }
 

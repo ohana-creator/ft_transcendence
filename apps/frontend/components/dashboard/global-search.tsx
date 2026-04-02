@@ -1,7 +1,5 @@
 'use client';
 
-// Last updated: 2026-04-01T09:49:00Z - Fixed abortRef cache issue
-
 import Link from 'next/link';
 import {
   Search,
@@ -19,12 +17,12 @@ import {
   Landmark,
   User,
 } from 'lucide-react';
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserAvatar } from '@/components/profile/useAvatar';
 import { useI18n } from '@/locales';
+import { api } from '@/utils/api/api';
 import { useAuth } from '@/contexts/auth';
-import { useDebounce, useCampaignSearch, useUserSearch } from '@/hooks/react-query';
 
 interface StaticSearchItem {
   id: string;
@@ -52,8 +50,8 @@ interface SearchUserResult {
   username: string;
   nome: string;
   href: string;
+  avatarUrl?: string;
   isOnline?: boolean;
-  avatarUrl?: string | null;
 }
 
 interface SearchCampaignResult {
@@ -84,12 +82,32 @@ interface ApiLikeError {
   message?: string;
 }
 
-type UsersSearchResponse = {
-  users?: Array<{ id: string; username: string; name?: string; bio?: string; avatarUrl?: string }>;
-  items?: Array<{ id: string; username: string; name?: string }>;
+interface OnlineStatusUser {
+  id?: string;
+  userId?: string;
+  username?: string;
+  userName?: string;
+  lastSeen?: string;
+  lastHeartbeat?: string;
+}
+
+type OnlineStatusApiResponse = {
+  [key: string]: unknown;
+  onlineUsers?: OnlineStatusUser[];
   data?: {
-    users?: Array<{ id: string; username: string; name?: string; bio?: string; avatarUrl?: string }>;
-    items?: Array<{ id: string; username: string; name?: string }>;
+    [key: string]: unknown;
+    onlineUsers?: OnlineStatusUser[];
+  };
+};
+
+const ONLINE_TIMEOUT_MS = 60 * 1000;
+
+type UsersSearchResponse = {
+  users?: Array<{ id: string; username: string; name?: string; bio?: string; avatarUrl?: string; avatar?: string; photoUrl?: string; image?: string; picture?: string }>;
+  items?: Array<{ id: string; username: string; name?: string; avatarUrl?: string; avatar?: string; photoUrl?: string; image?: string; picture?: string }>;
+  data?: {
+    users?: Array<{ id: string; username: string; name?: string; bio?: string; avatarUrl?: string; avatar?: string; photoUrl?: string; image?: string; picture?: string }>;
+    items?: Array<{ id: string; username: string; name?: string; avatarUrl?: string; avatar?: string; photoUrl?: string; image?: string; picture?: string }>;
   };
 };
 
@@ -209,12 +227,54 @@ function normalizeUsername(value: string): string {
   return value.replace(/^@/, '').trim().toLowerCase();
 }
 
-function extractUsersFromSearch(response: UsersSearchResponse): Array<{ id: string; username: string; name?: string }> {
+function extractUsersFromSearch(response: UsersSearchResponse): Array<{ id: string; username: string; name?: string; avatarUrl?: string; avatar?: string; photoUrl?: string; image?: string; picture?: string }> {
   if (Array.isArray(response.users)) return response.users;
   if (Array.isArray(response.items)) return response.items;
   if (response.data?.users) return response.data.users;
   if (response.data?.items) return response.data.items;
   return [];
+}
+
+function resolveAvatarUrl(user: { avatarUrl?: string; avatar?: string; photoUrl?: string; image?: string; picture?: string }): string | undefined {
+  return user.avatarUrl || user.avatar || user.photoUrl || user.image || user.picture;
+}
+
+function extractOnlineUsers(payload: OnlineStatusApiResponse): OnlineStatusUser[] {
+  if (!payload || typeof payload !== 'object') return [];
+  if (Array.isArray(payload.onlineUsers)) return payload.onlineUsers;
+  if (payload.data && Array.isArray(payload.data.onlineUsers)) return payload.data.onlineUsers;
+  return [];
+}
+
+function extractOnlineStatusMap(payload: OnlineStatusApiResponse): Record<string, boolean> {
+  if (!payload || typeof payload !== 'object') return {};
+
+  const rootMap = Object.entries(payload).reduce<Record<string, boolean>>((acc, [key, value]) => {
+    if (typeof value === 'boolean') {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+  if (Object.keys(rootMap).length > 0) return rootMap;
+
+  if (payload.data && typeof payload.data === 'object') {
+    const dataMap = Object.entries(payload.data).reduce<Record<string, boolean>>((acc, [key, value]) => {
+      if (typeof value === 'boolean') {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+    if (Object.keys(dataMap).length > 0) return dataMap;
+  }
+
+  return {};
+}
+
+function isPresenceOnline(lastSeen: string | undefined): boolean {
+  if (!lastSeen) return true;
+  const ts = new Date(lastSeen).getTime();
+  if (Number.isNaN(ts)) return true;
+  return Date.now() - ts <= ONLINE_TIMEOUT_MS;
 }
 
 export function GlobalSearch() {
@@ -226,37 +286,13 @@ export function GlobalSearch() {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [users, setUsers] = useState<SearchUserResult[]>([]);
+  const [campaigns, setCampaigns] = useState<SearchCampaignResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Debounce search query for better UX
-  const debouncedQuery = useDebounce(query, 300);
-
-  // Use React Query hooks for caching
-  const { data: userSearchData, isLoading: isLoadingUsers } = useUserSearch(debouncedQuery);
-  const { data: campaignSearchData, isLoading: isLoadingCampaigns } = useCampaignSearch(debouncedQuery);
-
-  // Transform data to component format
-  const users: SearchUserResult[] = useMemo(() => {
-    if (!userSearchData?.users) return [];
-    return userSearchData.users.map((u: any) => ({
-      id: u.id,
-      username: u.username,
-      nome: u.nome || u.username,
-      href: `/perfil/${encodeURIComponent(u.username)}`,
-      avatarUrl: u.avatar,
-    }));
-  }, [userSearchData]);
-
-  const campaigns: SearchCampaignResult[] = useMemo(() => {
-    if (!campaignSearchData?.campaigns) return [];
-    return campaignSearchData.campaigns.map((c: any) => ({
-      id: c.id,
-      title: c.titulo,
-      visibility: c.publica ? 'publica' as const : 'privada' as const,
-      href: `/vaquinhas/${c.publica ? 'publicas' : 'privadas'}/${c.id}`,
-    }));
-  }, [campaignSearchData]);
+  const abortRef = useRef<AbortController | null>(null);
+  const friendshipLookupCacheRef = useRef<Record<string, boolean>>({});
+  const onlineStatusEndpointUnavailableRef = useRef(false);
 
   const campaignVisibilityLabel = (visibility: 'publica' | 'privada') =>
     visibility === 'publica' ? gs.visibility.publico : gs.visibility.privado;
@@ -337,7 +373,297 @@ export function GlobalSearch() {
     },
   ];
 
-  // Filter frequent operations based on query (React Query optimized v2)
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
+
+    const fetchUserOnlineStatus = async (
+      limit: number,
+      signal: AbortSignal,
+    ): Promise<{ onlineUsers: OnlineStatusUser[]; onlineMap: Record<string, boolean> }> => {
+      if (signal.aborted) return { onlineUsers: [], onlineMap: {} };
+      if (onlineStatusEndpointUnavailableRef.current) return { onlineUsers: [], onlineMap: {} };
+      try {
+        const response = await api.get<OnlineStatusApiResponse>('/users/online-status', {
+          params: { limit },
+          signal,
+        });
+        return {
+          onlineUsers: extractOnlineUsers(response),
+          onlineMap: extractOnlineStatusMap(response),
+        };
+      } catch (err) {
+        if ((err as DOMException)?.name === 'AbortError') return { onlineUsers: [], onlineMap: {} };
+        if ((err as ApiLikeError)?.status === 404) {
+          onlineStatusEndpointUnavailableRef.current = true;
+        }
+        return { onlineUsers: [], onlineMap: {} };
+      }
+    };
+
+    // Fetch users directly from /users/search endpoint using the gateway
+    const fetchUsersBySearch = async (searchTerm: string, signal: AbortSignal): Promise<SearchUserResult[]> => {
+      try {
+        const response = await api.get<UsersSearchResponse>('/users/search', {
+          params: { q: searchTerm, page: 1, limit: 10 },
+          signal,
+        });
+        const users = extractUsersFromSearch(response);
+        const currentUsername = normalizeUsername(user?.username || '');
+        const currentUserId = user?.id;
+
+        return users.map((u) => ({
+          id: u.id,
+          username: u.username,
+          nome: u.name || u.username,
+          href: `/perfil/${encodeURIComponent(u.username)}`,
+          avatarUrl: resolveAvatarUrl(u),
+          isOnline:
+            (!!currentUserId && u.id === currentUserId) ||
+            (!!currentUsername && normalizeUsername(u.username) === currentUsername)
+              ? true
+              : undefined,
+        }));
+      } catch (err) {
+        if ((err as DOMException)?.name === 'AbortError') return [];
+        return [];
+      }
+    };
+
+    const fetchCampaignsSafe = async (limit: number, search: string | null, signal: AbortSignal): Promise<CampaignListItem[]> => {
+      if (signal.aborted) return [];
+      try {
+        const response = await api.get<CampaignListResponse>('/campaigns', {
+          params: {
+            limit,
+            status: 'ACTIVE',
+            sortBy: 'createdAt',
+            search: search || undefined,
+          },
+          signal,
+        });
+        return extractCampaigns(response);
+      } catch (error: unknown) {
+        const apiError = error as ApiLikeError;
+        if ((error as DOMException)?.name === 'AbortError') return [];
+        if (apiError?.status !== 400) {
+          return [];
+        }
+
+        try {
+          const response = await api.get<CampaignListResponse>('/campaigns', {
+            params: {
+              limit: Math.min(limit, 20),
+              status: 'ACTIVE',
+              sortBy: 'createdAt',
+              search: search || undefined,
+            },
+            signal,
+          });
+          return extractCampaigns(response);
+        } catch (innerError) {
+          if ((innerError as DOMException)?.name === 'AbortError') return [];
+          try {
+            const response = await api.get<CampaignListResponse>('/campaigns', {
+              params: {
+                status: 'ACTIVE',
+                sortBy: 'createdAt',
+                search: search || undefined,
+              },
+              signal,
+            });
+            return extractCampaigns(response);
+          } catch {
+            return [];
+          }
+        }
+      }
+    };
+
+    const loadSuggestions = async (signal: AbortSignal) => {
+      try {
+        const normalized = query.trim();
+        const normalizedLower = normalized.toLowerCase();
+        const currentUsername = user?.username?.trim() || '';
+        const currentUsernameLower = currentUsername.toLowerCase();
+
+        // Se vazio, mostrar campanhas recentes
+        if (!normalized) {
+          const campaignList = await fetchCampaignsSafe(8, null, signal);
+
+          if (cancelled || signal.aborted) return;
+
+          const realCampaigns = campaignList
+            .filter((campaign) => !campaign.isPrivate)
+            .map((campaign) => ({
+            id: campaign.id,
+            title: campaign.title || campaign.name || 'Vaquinha',
+            href: `/vaquinhas/${campaign.id}`,
+            visibility: campaign.isPrivate ? ('privada' as const) : ('publica' as const),
+            ownerUsername: campaign.ownerUsername,
+          }));
+
+          setUsers([]);
+          setCampaigns(realCampaigns);
+          return;
+        }
+
+        // Buscar apenas com 2+ caracteres
+        if (normalized.length < 2) {
+          setUsers([]);
+          setCampaigns([]);
+          return;
+        }
+
+        if (currentUsername && currentUsernameLower === normalizedLower) {
+          setUsers([
+            {
+              id: user?.id || `user-${normalizedLower}`,
+              username: currentUsername,
+              nome: user?.name || currentUsername,
+              href: '/perfil',
+            },
+          ]);
+        }
+
+        let realUsers: SearchUserResult[] = [];
+        let realCampaigns: SearchCampaignResult[] = [];
+        if (!cancelled) {
+          let searchUsers: SearchUserResult[] = [];
+          let searchCampaigns: SearchCampaignResult[] = [];
+
+          // Search users via /users/search endpoint (primary method)
+          try {
+            const directUserSearch = await fetchUsersBySearch(normalized, signal);
+            searchUsers = directUserSearch;
+          } catch {
+            searchUsers = [];
+          }
+
+          // Fetch campaigns (max 50 per backend limit)
+          const campaignList = await fetchCampaignsSafe(50, normalized, signal);
+
+          // Local filtering for campaigns
+          const campaignSearchFallback = campaignList
+            .filter((campaign) => !campaign.isPrivate)
+            .filter((campaign) => {
+              const title = (campaign.title || campaign.name || '').toLowerCase();
+              const description = (campaign.description || '').toLowerCase();
+              const owner = (campaign.ownerUsername || '').toLowerCase();
+              return title.includes(normalizedLower) || description.includes(normalizedLower) || owner.includes(normalizedLower);
+            })
+            .map((campaign) => ({
+              id: campaign.id,
+              title: campaign.title || campaign.name || 'Vaquinha',
+              href: `/vaquinhas/${campaign.id}`,
+              visibility: campaign.isPrivate ? ('privada' as const) : ('publica' as const),
+              ownerUsername: campaign.ownerUsername,
+            }));
+
+          realCampaigns = uniqueCampaigns([...searchCampaigns, ...campaignSearchFallback]);
+
+          const ownerUsers = campaignList
+            .filter((campaign) => !campaign.isPrivate)
+            .filter((campaign) => (campaign.ownerUsername || '').toLowerCase().includes(normalizedLower))
+            .map((campaign) => {
+              const username = campaign.ownerUsername || '';
+              return {
+                id: `owner-${campaign.id}`,
+                username,
+                nome: username,
+                href: `/perfil/${encodeURIComponent(username)}`,
+              };
+            });
+
+          let directLookupUsers: SearchUserResult[] = [];
+          if (currentUsername && currentUsernameLower === normalizedLower) {
+            directLookupUsers = [
+              {
+                id: user?.id || `user-${normalizedLower}`,
+                username: currentUsername,
+                nome: user?.name || currentUsername,
+                href: '/perfil',
+              },
+            ];
+          }
+
+          const dedupedUsers = uniqueUsers([...searchUsers, ...ownerUsers, ...directLookupUsers]);
+          realUsers = sortUsersByRelevance(dedupedUsers, normalizedLower);
+
+          // Fetch online status for all found users
+          if (realUsers.length > 0) {
+            const { onlineUsers, onlineMap } = await fetchUserOnlineStatus(
+              Math.max(100, realUsers.length * 4),
+              signal,
+            );
+
+            if (onlineUsers.length > 0) {
+              const nextCache = { ...friendshipLookupCacheRef.current };
+              onlineUsers.forEach((onlineUser) => {
+                const resolvedId = onlineUser.id || onlineUser.userId;
+                const resolvedUsername = onlineUser.username || onlineUser.userName;
+                const normalizedUsername = normalizeUsername(resolvedUsername || '');
+                const isOnlineNow = isPresenceOnline(onlineUser.lastSeen || onlineUser.lastHeartbeat);
+                if (resolvedId) nextCache[resolvedId] = isOnlineNow;
+                if (resolvedUsername) nextCache[resolvedUsername] = isOnlineNow;
+                if (normalizedUsername) nextCache[normalizedUsername] = isOnlineNow;
+              });
+              friendshipLookupCacheRef.current = nextCache;
+            }
+
+            const currentUsername = normalizeUsername(user?.username || '');
+            const currentUserId = user?.id;
+
+            realUsers = realUsers.map((u) => {
+              const lookup = normalizeUsername(u.username);
+              const snapshot = onlineUsers.find((onlineUser) => {
+                const resolvedId = onlineUser.id || onlineUser.userId;
+                const resolvedUsername = onlineUser.username || onlineUser.userName;
+                const snapshotUsername = normalizeUsername(resolvedUsername || '');
+                return (
+                  (!!resolvedId && resolvedId === u.id)
+                  || (!!snapshotUsername && snapshotUsername === lookup)
+                );
+              });
+              return {
+                ...u,
+                isOnline:
+                  (snapshot ? isPresenceOnline(snapshot.lastSeen || snapshot.lastHeartbeat) : undefined)
+                  ?? onlineMap[u.id]
+                  ?? onlineMap[u.username]
+                  ?? onlineMap[lookup]
+                  ?? friendshipLookupCacheRef.current[lookup]
+                  ?? friendshipLookupCacheRef.current[u.username]
+                  ?? friendshipLookupCacheRef.current[u.id]
+                  ?? ((!!currentUserId && u.id === currentUserId) || (!!currentUsername && lookup === currentUsername) ? true : false),
+              };
+            });
+          }
+        }
+
+        if (cancelled || signal.aborted) return;
+        setUsers(sortUsersByRelevance(uniqueUsers(realUsers), normalizedLower));
+        setCampaigns(realCampaigns);
+      } catch (err) {
+        if (cancelled || (err as DOMException)?.name === 'AbortError') return;
+        // Preserva os utilizadores já resolvidos quando possível; apenas limpa campanhas em erro global.
+        setCampaigns([]);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      loadSuggestions(controller.signal);
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, user?.id, user?.name, user?.username]);
+
   const normalizedQuery = query.trim().toLowerCase();
   const filteredOperations = frequentOperations.filter((item) => {
     if (!normalizedQuery) {
@@ -482,8 +808,8 @@ export function GlobalSearch() {
                               <span
                                 className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-vaks-light-purple-card dark:border-vaks-dark-purple-card ${
                                   searchUser.isOnline
-                                    ? 'bg-green-500'
-                                    : 'bg-gray-400 dark:bg-gray-600'
+                                  ? 'bg-green-500'
+                                    : 'bg-gray-400'
                                 }`}
                                 title={searchUser.isOnline ? gs.online : gs.offline}
                               />
@@ -496,12 +822,17 @@ export function GlobalSearch() {
                               </span>
                               {searchUser.isOnline !== undefined && (
                                 <span
-                                  className={`text-[10px] font-medium ${
+                                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                                     searchUser.isOnline
-                                      ? 'text-green-600 dark:text-green-400'
-                                      : 'text-gray-500 dark:text-gray-400'
+                                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                                      : 'bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400'
                                   }`}
                                 >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${
+                                      searchUser.isOnline ? 'bg-emerald-500' : 'bg-gray-400'
+                                    }`}
+                                  />
                                   {searchUser.isOnline ? gs.online : gs.offline}
                                 </span>
                               )}

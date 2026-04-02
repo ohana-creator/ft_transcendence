@@ -81,7 +81,7 @@ export default function VaquinhaPrivadaPage({
     if (showMembersModal) {
       refetchMembers();
     }
-  }, [showMembersModal, refetchMembers]);
+  }, [id, loading, vaquinha, error, showMembersModal, refetchMembers]);
 
   const handlePromoteToAdmin = async (member: CampaignMember) => {
     // Verificar permissões
@@ -166,6 +166,16 @@ export default function VaquinhaPrivadaPage({
     );
   }
 
+  // Se for erro de autenticação, redirecionar para login
+  if (error === 'unauthorized') {
+    router.replace('/login');
+    return (
+      <div className="min-h-screen bg-vaks-light-primary dark:bg-vaks-dark-primary flex items-center justify-center">
+        <p>{t.vaquinhas.detalhe.carregando}</p>
+      </div>
+    );
+  }
+
   if (error || !vaquinha) {
     return (
       <div className="min-h-screen bg-vaks-light-primary dark:bg-vaks-dark-primary flex items-center justify-center">
@@ -243,7 +253,11 @@ export default function VaquinhaPrivadaPage({
                     anonimo: contribution.anonimo,
                     newAmount,
                   });
-                  refetch?.();
+
+                  // Evita sobrescrever a atualização otimista com dados ainda não propagados no backend.
+                  setTimeout(() => {
+                    refetch?.();
+                  }, 1500);
                 }}
               />
             </div>

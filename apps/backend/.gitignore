@@ -46,6 +46,8 @@ lerna-debug.log*
 # Docker secrets
 secrets/*.txt
 !secrets/README.md
+secrets/tls/*
+!secrets/tls/.gitkeep
 
 # temp directory
 .temp

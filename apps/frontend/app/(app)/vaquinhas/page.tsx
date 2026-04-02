@@ -7,6 +7,10 @@ import { CardCarousel } from '@/components/ui/card-carousel';
 import { useI18n } from '@/locales';
 import { useVaquinhas, type VaquinhaPublica } from '@/hooks/vaquinhas/useVaquinhas';
 
+function getVaquinhaDetailPath(vaquinha: VaquinhaPublica): string {
+  return vaquinha.isPrivate ? `/vaquinhas/privadas/${vaquinha.id}` : `/vaquinhas/${vaquinha.id}`;
+}
+
 // ─── Tipos ──────────────────────────────────────────────────────────────
 
 type VaquinhaTab = 'publicas' | 'privadas';
@@ -66,8 +70,11 @@ function SocialProofTicker() {
 
 // ─── Avatar Stack ───────────────────────────────────────────────────────
 function AvatarStack({ contribuidores, max = 4 }: { contribuidores: string[]; max?: number }) {
+  const { t } = useI18n();
+  const hb = t.vaquinhas.hub;
   const visible = contribuidores.slice(0, max);
   const remaining = contribuidores.length - max;
+  const contributorLabel = contribuidores.length === 1 ? hb.contribuidor : hb.contribuidores;
   const colors = [
     'bg-yellow-400', 'bg-pink-400', 'bg-teal-400', 'bg-indigo-400',
     'bg-orange-400', 'bg-emerald-400', 'bg-rose-400', 'bg-cyan-400',
@@ -91,7 +98,7 @@ function AvatarStack({ contribuidores, max = 4 }: { contribuidores: string[]; ma
           </div>
         )}
       </div>
-      <span className="ml-2.5 text-xs text-gray-400">{contribuidores.length} contribuidores</span>
+      <span className="ml-2.5 text-xs text-gray-400">{contribuidores.length} {contributorLabel}</span>
     </div>
   );
 }
@@ -155,6 +162,7 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
   const percent = vaquinha.meta > 0
     ? Math.min((vaquinha.arrecadado / vaquinha.meta) * 100, 100)
     : 0;
+  const contributorLabel = vaquinha.contribuidores.length === 1 ? hb.contribuidor : hb.contribuidores;
 
   const avatarColors = [
     'bg-emerald-400', 'bg-pink-400', 'bg-yellow-400', 'bg-cyan-400', 'bg-purple-400', 'bg-rose-400',
@@ -162,7 +170,7 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
 
   return (
     <div
-      onClick={() => router.push(`/vaquinhas/${vaquinha.id}`)}
+      onClick={() => router.push(getVaquinhaDetailPath(vaquinha))}
       className="group cursor-pointer relative rounded-3xl overflow-hidden border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card shadow-sm hover:shadow-2xl transition-all duration-300"
     >
       <div className="grid md:grid-cols-2 gap-0">
@@ -220,7 +228,7 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
                   </div>
                 )}
               </div>
-              <span className="ml-3 text-xs text-gray-400">{vaquinha.contribuidores.length} {hb.contribuidores}</span>
+              <span className="ml-3 text-xs text-gray-400">{vaquinha.contribuidores.length} {contributorLabel}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <div className={`w-2 h-2 rounded-full ${vaquinha.diasRestantes <= 3 ? 'bg-red-400' : 'bg-emerald-400'}`} />
@@ -229,7 +237,7 @@ function DestaqueHero({ vaquinha }: { vaquinha: VaquinhaPublica }) {
           </div>
 
           <button
-            onClick={(e) => { e.stopPropagation(); router.push(`/vaquinhas/${vaquinha.id}`); }}
+            onClick={(e) => { e.stopPropagation(); router.push(getVaquinhaDetailPath(vaquinha)); }}
             className="w-full py-3.5 bg-gradient-to-br from-violet-700 via-violet-600 to-violet-500 hover:from-violet-600 hover:via-violet-500 hover:to-violet-400 text-white font-bold rounded-2xl transition-all duration-300 shadow-lg shadow-violet-300 hover:shadow-xl hover:shadow-violet-400 hover:scale-[1.01] text-sm"
           >
             {hb.contribuir_agora}
@@ -269,7 +277,7 @@ function VaquinhaPublicaCard({ vaquinha, index }: { vaquinha: VaquinhaPublica; i
 
   return (
     <button
-      onClick={() => router.push(`/vaquinhas/${vaquinha.id}`)}
+      onClick={() => router.push(getVaquinhaDetailPath(vaquinha))}
       className="group bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-400 text-left border border-vaks-light-purple-card-hover dark:border-vaks-dark-purple-card-hover hover:-translate-y-1"
     >
       {/* Imagem de Capa */}

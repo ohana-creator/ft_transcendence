@@ -34,6 +34,30 @@ function toNumericAmount(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function resolveCurrentAmount(result: unknown, fallback: number): number {
+  if (!result || typeof result !== 'object') return fallback;
+
+  const raw = result as {
+    currentAmount?: unknown;
+    data?: {
+      currentAmount?: unknown;
+      arrecadado?: unknown;
+      campaign?: { currentAmount?: unknown };
+      vaquinha?: { arrecadado?: unknown; currentAmount?: unknown };
+    };
+  };
+
+  return toNumericAmount(
+    raw.currentAmount ??
+    raw.data?.currentAmount ??
+    raw.data?.arrecadado ??
+    raw.data?.campaign?.currentAmount ??
+    raw.data?.vaquinha?.currentAmount ??
+    raw.data?.vaquinha?.arrecadado,
+    fallback
+  );
+}
+
 export default function ContribuicaoForm({ vaquinhaId, onSuccess }: ContribuicaoFormProps) {
   const { t } = useI18n();
   const dt = t.vaquinhas.detalhe;
@@ -72,8 +96,9 @@ export default function ContribuicaoForm({ vaquinhaId, onSuccess }: Contribuicao
 
       // Callback com novo valor arrecadado + contribuição local para atualização otimista
       if (onSuccess) {
+        const resolvedAmount = resolveCurrentAmount(result, amount);
         onSuccess({
-          newAmount: toNumericAmount(result.currentAmount, amount),
+          newAmount: resolvedAmount,
           contribution: {
             valor: amount,
             mensagem: mensagem || undefined,

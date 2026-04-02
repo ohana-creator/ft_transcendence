@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -25,10 +25,12 @@ import { useI18n } from "@/locales";
 import { api } from "@/utils/api/api";
 import { UserAvatar } from "@/components/profile/useAvatar";
 import { PAGINATION_DEFAULTS } from "@/utils/config/pagination";
+import { useAuth } from "@/contexts/auth";
 
 interface SearchUser {
   id: string;
   username: string;
+  name?: string;
   bio?: string;
   avatarUrl?: string;
   isOnline: boolean;
@@ -40,27 +42,47 @@ interface SearchUsersResponse {
   users?: Array<{
     id: string;
     username: string;
+    name?: string;
     bio?: string;
     avatarUrl?: string;
+    avatar?: string;
+    photoUrl?: string;
+    image?: string;
+    picture?: string;
   }>;
   items?: Array<{
     id: string;
     username: string;
+    name?: string;
     bio?: string;
     avatarUrl?: string;
+    avatar?: string;
+    photoUrl?: string;
+    image?: string;
+    picture?: string;
   }>;
   data?: {
     users?: Array<{
       id: string;
       username: string;
+      name?: string;
       bio?: string;
       avatarUrl?: string;
+      avatar?: string;
+      photoUrl?: string;
+      image?: string;
+      picture?: string;
     }>;
     items?: Array<{
       id: string;
       username: string;
+      name?: string;
       bio?: string;
       avatarUrl?: string;
+      avatar?: string;
+      photoUrl?: string;
+      image?: string;
+      picture?: string;
     }>;
   };
   meta?: {
@@ -71,9 +93,30 @@ interface SearchUsersResponse {
   };
 }
 
+interface OnlineStatusUser {
+  id?: string;
+  userId?: string;
+  username?: string;
+  userName?: string;
+  lastSeen?: string;
+  lastHeartbeat?: string;
+}
+
+type OnlineStatusApiResponse = {
+  [key: string]: unknown;
+  onlineUsers?: OnlineStatusUser[];
+  data?: {
+    [key: string]: unknown;
+    onlineUsers?: OnlineStatusUser[];
+  };
+};
+
+const ONLINE_TIMEOUT_MS = 60 * 1000;
+
 type SortField = "username" | "name" | "recent";
 type SortOrder = "asc" | "desc";
 type FilterType = "all" | "online" | "friends";
+type ApiLikeError = { status?: number; message?: string };
 
 const normalizeUsername = (value: string) => value.replace(/^@/, "").trim().toLowerCase();
 
@@ -85,8 +128,55 @@ const extractUsersFromSearch = (response: SearchUsersResponse) => {
   return [];
 };
 
+const resolveAvatarUrl = (user: {
+  avatarUrl?: string;
+  avatar?: string;
+  photoUrl?: string;
+  image?: string;
+  picture?: string;
+}) => user.avatarUrl || user.avatar || user.photoUrl || user.image || user.picture;
+
+const extractOnlineUsers = (payload: OnlineStatusApiResponse): OnlineStatusUser[] => {
+  if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload.onlineUsers)) return payload.onlineUsers;
+  if (payload.data && Array.isArray(payload.data.onlineUsers)) return payload.data.onlineUsers;
+  return [];
+};
+
+const extractOnlineStatusMap = (payload: OnlineStatusApiResponse): Record<string, boolean> => {
+  if (!payload || typeof payload !== "object") return {};
+
+  const rootMap = Object.entries(payload).reduce<Record<string, boolean>>((acc, [key, value]) => {
+    if (typeof value === "boolean") {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+  if (Object.keys(rootMap).length > 0) return rootMap;
+
+  if (payload.data && typeof payload.data === "object") {
+    const dataMap = Object.entries(payload.data).reduce<Record<string, boolean>>((acc, [key, value]) => {
+      if (typeof value === "boolean") {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+    if (Object.keys(dataMap).length > 0) return dataMap;
+  }
+
+  return {};
+};
+
+const isPresenceOnline = (lastSeen: string | undefined): boolean => {
+  if (!lastSeen) return true;
+  const ts = new Date(lastSeen).getTime();
+  if (Number.isNaN(ts)) return true;
+  return Date.now() - ts <= ONLINE_TIMEOUT_MS;
+};
+
 export default function PesquisarPage() {
   const { t } = useI18n();
+  const { user: currentUser } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const sr = t.dashboard.search_results;
@@ -101,6 +191,7 @@ export default function PesquisarPage() {
   const [users, setUsers] = useState<SearchUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -114,6 +205,8 @@ export default function PesquisarPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
+  const onlineStatusEndpointUnavailableRef = useRef(false);
+  const onlineStatusCacheRef = useRef<Record<string, boolean>>({});
 
   // Debounce search query
   useEffect(() => {
@@ -164,43 +257,69 @@ export default function PesquisarPage() {
       });
 
       const rawUsers = extractUsersFromSearch(response);
+      const currentUsername = normalizeUsername(currentUser?.username || "");
+      const currentUserId = currentUser?.id;
       const userData: SearchUser[] = rawUsers.map(u => ({
         id: u.id,
         username: u.username,
+        name: u.name,
         bio: u.bio,
-        avatarUrl: u.avatarUrl,
-        isOnline: false,
+        avatarUrl: resolveAvatarUrl(u),
+        isOnline:
+          (!!currentUserId && u.id === currentUserId) ||
+          (!!currentUsername && normalizeUsername(u.username) === currentUsername),
       }));
       const meta = response.meta;
 
       // Fetch online status for users
-      if (userData.length > 0) {
+      if (userData.length > 0 && !onlineStatusEndpointUnavailableRef.current) {
         try {
-          const usernames = userData.map((u) => u.username);
-          const statusResponse = await api.get<Record<string, boolean>>(
-            "/users/online-status",
-            {
-              params: { usernames: usernames.join(",") },
-            }
-          );
-          const primary =
-            (statusResponse as { data?: Record<string, boolean> }).data ||
-            statusResponse;
-          const onlineStatus = Object.keys(primary).length > 0
-            ? primary
-            : (await api.get<Record<string, boolean>>("/users/online-status", {
-                params: { ids: userData.map((u) => u.id).join(",") },
-              })) as Record<string, boolean>;
+          const statusResponse = await api.get<OnlineStatusApiResponse>("/users/online-status", {
+            params: { limit: 500 },
+          });
+          const onlineUsers = extractOnlineUsers(statusResponse);
+          const onlineMap = extractOnlineStatusMap(statusResponse);
+
+          if (onlineUsers.length > 0) {
+            const nextCache = { ...onlineStatusCacheRef.current };
+            onlineUsers.forEach((onlineUser) => {
+              const resolvedId = onlineUser.id || onlineUser.userId;
+              const resolvedUsername = onlineUser.username || onlineUser.userName;
+              const normalizedUsername = normalizeUsername(resolvedUsername || "");
+              const isOnlineNow = isPresenceOnline(onlineUser.lastSeen || onlineUser.lastHeartbeat);
+              if (resolvedId) nextCache[resolvedId] = isOnlineNow;
+              if (resolvedUsername) nextCache[resolvedUsername] = isOnlineNow;
+              if (normalizedUsername) nextCache[normalizedUsername] = isOnlineNow;
+            });
+            onlineStatusCacheRef.current = nextCache;
+          }
 
           userData.forEach((user) => {
             const lookup = normalizeUsername(user.username);
+            const snapshotUser = onlineUsers.find((onlineUser) => {
+              const resolvedId = onlineUser.id || onlineUser.userId;
+              const resolvedUsername = onlineUser.username || onlineUser.userName;
+              const snapshotUsername = normalizeUsername(resolvedUsername || "");
+              return (
+                (!!resolvedId && resolvedId === user.id) ||
+                (!!snapshotUsername && snapshotUsername === lookup)
+              );
+            });
+
             user.isOnline =
-              onlineStatus[lookup] ??
-              onlineStatus[user.username] ??
-              onlineStatus[user.id] ??
-              false;
+              (snapshotUser ? isPresenceOnline(snapshotUser.lastSeen || snapshotUser.lastHeartbeat) : undefined) ??
+              onlineMap[user.id] ??
+              onlineMap[user.username] ??
+              onlineMap[lookup] ??
+              onlineStatusCacheRef.current[lookup] ??
+              onlineStatusCacheRef.current[user.username] ??
+              onlineStatusCacheRef.current[user.id] ??
+              ((!!currentUserId && user.id === currentUserId) || (!!currentUsername && lookup === currentUsername));
           });
-        } catch {
+        } catch (error: unknown) {
+          if ((error as ApiLikeError)?.status === 404) {
+            onlineStatusEndpointUnavailableRef.current = true;
+          }
           // Keep default isOnline values
         }
       }
@@ -217,6 +336,7 @@ export default function PesquisarPage() {
       setError(t.common.error_get_data);
       setUsers([]);
     } finally {
+      setHasLoadedOnce(true);
       setLoading(false);
     }
   }, [
@@ -226,6 +346,8 @@ export default function PesquisarPage() {
     filterType,
     sortField,
     sortOrder,
+    currentUser?.id,
+    currentUser?.username,
     t.common.error_get_data,
   ]);
 
@@ -491,7 +613,7 @@ export default function PesquisarPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
         >
-          {loading ? (
+          {loading || !hasLoadedOnce ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-8 h-8 border-2 border-vaks-light-purple-button/30 border-t-vaks-light-purple-button dark:border-vaks-dark-purple-button/30 dark:border-t-vaks-dark-purple-button rounded-full animate-spin" />
             </div>
@@ -535,7 +657,7 @@ export default function PesquisarPage() {
                     >
                       <div className="flex items-center gap-4">
                         <div className="relative">
-                          <UserAvatar username={user.username} size="md" />
+                          <UserAvatar username={user.username} avatarUrl={user.avatarUrl} size="md" />
                           <span
                             className={`absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-vaks-light-purple-card dark:border-vaks-dark-purple-card ${
                               user.isOnline
@@ -546,6 +668,11 @@ export default function PesquisarPage() {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
+                          {user.name && (
+                            <p className="text-sm font-semibold text-vaks-light-main-txt dark:text-vaks-dark-main-txt truncate">
+                              {user.name}
+                            </p>
+                          )}
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-vaks-light-main-txt dark:text-vaks-dark-main-txt truncate group-hover:text-vaks-light-purple-button dark:group-hover:text-vaks-dark-purple-button transition-colors">
                               @{user.username}

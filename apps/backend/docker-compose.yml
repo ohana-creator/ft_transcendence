@@ -18,12 +18,16 @@ services:
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-      AUTH_SERVICE_URL: http://auth-service:${AUTH_SERVICE_PORT}
-      CAMPAIGN_SERVICE_URL: http://campaign-service:${CAMPAIGN_SERVICE_PORT}
-      NOTIFICATION_SERVICE_URL: http://notification-service:${NOTIFICATION_SERVICE_PORT}
-      USER_SERVICE_URL: http://user-service:${USER_SERVICE_PORT}
-      WALLET_SERVICE_URL: http://wallet-service:${WALLET_SERVICE_PORT}
-      LEDGER_SERVICE_URL: http://ledger-service:${LEDGER_SERVICE_PORT}
+      AUTH_SERVICE_URL: https://auth-service:${AUTH_SERVICE_PORT}
+      CAMPAIGN_SERVICE_URL: https://campaign-service:${CAMPAIGN_SERVICE_PORT}
+      NOTIFICATION_SERVICE_URL: https://notification-service:${NOTIFICATION_SERVICE_PORT}
+      USER_SERVICE_URL: https://user-service:${USER_SERVICE_PORT}
+      WALLET_SERVICE_URL: https://wallet-service:${WALLET_SERVICE_PORT}
+      LEDGER_SERVICE_URL: https://ledger-service:${LEDGER_SERVICE_PORT}
+      HTTPS_REQUIRED: 'false'
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
+    volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
     networks:
       - TransNetwork
     depends_on:
@@ -88,6 +92,12 @@ services:
       FACEBOOK_CLIENT_SECRET_FILE: /run/secrets/facebook_client_secret
       FACEBOOK_CALLBACK_URL: ${FACEBOOK_CALLBACK_URL}
       FRONTEND_URL: ${FRONTEND_URL}
+      HTTPS_REQUIRED: 'true'
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
+    volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
     networks:
       - TransNetwork
       - authnet
@@ -138,16 +148,21 @@ services:
       DB_USER: ${CAMPAIGN_DB_USER}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-      WALLET_SERVICE_URL: http://wallet-service:${WALLET_SERVICE_PORT}
+      WALLET_SERVICE_URL: https://wallet-service:${WALLET_SERVICE_PORT}
       INTERNAL_API_KEY_FILE: /run/secrets/internal_api_key
       CAMPAIGN_IMAGE_STORAGE: ${CAMPAIGN_IMAGE_STORAGE:-local}
       CAMPAIGN_UPLOADS_DIR: /app/uploads
-      CAMPAIGN_PUBLIC_BASE_URL: ${CAMPAIGN_PUBLIC_BASE_URL:-http://localhost:3000}
+      CAMPAIGN_PUBLIC_BASE_URL: ${CAMPAIGN_PUBLIC_BASE_URL:-https://localhost:3000}
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_BUCKET: ${R2_BUCKET}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      HTTPS_REQUIRED: 'true'
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
     volumes:
       - campaign_uploads:/app/uploads
+      - ./secrets/tls:/run/secrets/tls:ro
     networks:
       - TransNetwork
       - campaignnet
@@ -206,6 +221,12 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM}
       JWT_SECRET_FILE: /run/secrets/jwt_secret
+      HTTPS_REQUIRED: 'true'
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
+    volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
     networks:
       - TransNetwork
       - notificationnet
@@ -256,10 +277,16 @@ services:
       DB_USER: ${USER_DB_USER}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-      WALLET_SERVICE_URL: http://wallet-service:${WALLET_SERVICE_PORT}
+      WALLET_SERVICE_URL: https://wallet-service:${WALLET_SERVICE_PORT}
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_BUCKET: ${R2_BUCKET}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+      HTTPS_REQUIRED: 'true'
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
+    volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
     networks:
       - TransNetwork
       - usernet
@@ -309,10 +336,16 @@ services:
       DB_USER: ${WALLET_DB_USER}
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
-      USER_SERVICE_URL: http://user-service:${USER_SERVICE_PORT}
+      USER_SERVICE_URL: https://user-service:${USER_SERVICE_PORT}
       INTERNAL_API_KEY_FILE: /run/secrets/internal_api_key
       FRONTEND_URL: ${FRONTEND_URL}
       TOPUP_CHECKOUT_PATH: ${TOPUP_CHECKOUT_PATH:-/carteira/carregar}
+      HTTPS_REQUIRED: 'true'
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
+    volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
     networks:
       - TransNetwork
       - walletnet
@@ -366,6 +399,12 @@ services:
       AVALANCHE_RPC_URL: ${AVALANCHE_RPC_URL}
       VAKS_CONTRACT_ADDRESS: ${VAKS_CONTRACT_ADDRESS}
       ADMIN_PRIVATE_KEY_FILE: /run/secrets/admin_private_key
+      HTTPS_REQUIRED: 'true'
+      TLS_CERT_PATH: /run/secrets/tls/backend.crt
+      TLS_KEY_PATH: /run/secrets/tls/backend.key
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls/ca.crt
+    volumes:
+      - ./secrets/tls:/run/secrets/tls:ro
     networks:
       - TransNetwork
       - ledgennet
@@ -387,6 +426,50 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - TransNetwork
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3003}
+        NEXT_PUBLIC_WS_ENABLED: ${NEXT_PUBLIC_WS_ENABLED:-true}
+        NEXT_PUBLIC_FRONTEND_URL: ${NEXT_PUBLIC_FRONTEND_URL:-http://localhost:3001}
+        NEXT_PUBLIC_PENDING_INVITATIONS_ENDPOINT: ${NEXT_PUBLIC_PENDING_INVITATIONS_ENDPOINT:-/invitations/pending}
+        NEXT_PUBLIC_DEBUG_INVITES: ${NEXT_PUBLIC_DEBUG_INVITES:-false}
+        NEXT_PUBLIC_DEBUG_LOGIN: ${NEXT_PUBLIC_DEBUG_LOGIN:-false}
+        NEXT_PUBLIC_DEBUG_API_REQUESTS: ${NEXT_PUBLIC_DEBUG_API_REQUESTS:-false}
+        NEXT_PUBLIC_DEBUG_CAMPAIGN_DETAIL: ${NEXT_PUBLIC_DEBUG_CAMPAIGN_DETAIL:-false}
+        NEXT_PUBLIC_DEBUG_CAMPAIGN_IMAGE: ${NEXT_PUBLIC_DEBUG_CAMPAIGN_IMAGE:-false}
+        NEXT_PUBLIC_SILENCE_BACKEND_REQUESTS: ${NEXT_PUBLIC_SILENCE_BACKEND_REQUESTS:-false}
+        API_GATEWAY_INTERNAL_URL: ${API_GATEWAY_INTERNAL_URL:-http://api-gateway:3000}
+    image: vaks-frontend
+    container_name: vaks-frontend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3003}
+      NEXT_PUBLIC_WS_ENABLED: ${NEXT_PUBLIC_WS_ENABLED:-true}
+      NEXT_PUBLIC_FRONTEND_URL: ${NEXT_PUBLIC_FRONTEND_URL:-http://localhost:3001}
+      NEXT_PUBLIC_PENDING_INVITATIONS_ENDPOINT: ${NEXT_PUBLIC_PENDING_INVITATIONS_ENDPOINT:-/invitations/pending}
+      NEXT_PUBLIC_DEBUG_INVITES: ${NEXT_PUBLIC_DEBUG_INVITES:-false}
+      NEXT_PUBLIC_DEBUG_LOGIN: ${NEXT_PUBLIC_DEBUG_LOGIN:-false}
+      NEXT_PUBLIC_DEBUG_API_REQUESTS: ${NEXT_PUBLIC_DEBUG_API_REQUESTS:-false}
+      NEXT_PUBLIC_DEBUG_CAMPAIGN_DETAIL: ${NEXT_PUBLIC_DEBUG_CAMPAIGN_DETAIL:-false}
+      NEXT_PUBLIC_DEBUG_CAMPAIGN_IMAGE: ${NEXT_PUBLIC_DEBUG_CAMPAIGN_IMAGE:-false}
+      NEXT_PUBLIC_SILENCE_BACKEND_REQUESTS: ${NEXT_PUBLIC_SILENCE_BACKEND_REQUESTS:-false}
+      API_GATEWAY_INTERNAL_URL: ${API_GATEWAY_INTERNAL_URL:-http://api-gateway:3000}
+    depends_on:
+      api-gateway:
+        condition: service_started
     networks:
       - TransNetwork
 

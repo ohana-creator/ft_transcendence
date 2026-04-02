@@ -13,18 +13,6 @@ import { api } from "@/utils/api/api";
 import { toast } from "@/utils/toast";
 import { useAuth } from "@/contexts/auth";
 
-const DEBUG_LOGIN = process.env.NEXT_PUBLIC_DEBUG_LOGIN === "true";
-
-function debugLogin(message: string, data?: Record<string, unknown>) {
-  if (!DEBUG_LOGIN) return;
-  if (typeof window === "undefined") return;
-  const stamp = new Date().toISOString();
-  if (data) {
-    console.log(`[LOGIN-DEBUG ${stamp}] ${message}`, data);
-    return;
-  }
-  console.log(`[LOGIN-DEBUG ${stamp}] ${message}`);
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,18 +38,8 @@ export default function LoginPage() {
     setError(null);
     const identifier = email.trim();
 
-    debugLogin("Login submit", {
-      identifier,
-      identifierType: identifier.includes("@") ? "email" : "username",
-      passwordLength: password.length,
-    });
-
     if (!identifier || !password.trim()) {
       const message = login.erro_campos_obrigatorios;
-      debugLogin("Login blocked: missing fields", {
-        hasIdentifier: Boolean(identifier),
-        hasPassword: Boolean(password.trim()),
-      });
       setError(message);
       toast.error(message);
       setLoading(false);
@@ -92,29 +70,11 @@ export default function LoginPage() {
       const resolvedUser = responseData?.user || responseData;
       const resolvedToken = responseData?.accessToken || responseData?.token || response?.tempToken;
       const shouldUseTwoFA = response?.requiresTwoFA !== false;
-      debugLogin("/auth/login response", {
-        success: response?.success,
-        hasData: Boolean(responseData),
-        hasAccessToken: Boolean(responseData?.accessToken),
-        hasToken: Boolean(responseData?.token),
-        hasResolvedToken: Boolean(resolvedToken),
-        requiresTwoFA: Boolean(response?.requiresTwoFA),
-        userEmail: resolvedUser?.email || null,
-      });
 
       if (response.success && resolvedToken) {
         const twoFAEmail = resolvedUser?.email || (identifier.includes('@') ? identifier : '');
 
-        debugLogin("2FA email resolved", {
-          resolvedEmail: twoFAEmail || null,
-          source: resolvedUser?.email ? "api.response.email" : "identifier",
-        });
-
         if (!shouldUseTwoFA) {
-          debugLogin("Direct login without 2FA", {
-            hasResolvedUser: Boolean(resolvedUser?.id || resolvedUser?.username || resolvedUser?.email),
-          });
-
           authLogin(resolvedToken, resolvedUser);
           toast.success("Login realizado com sucesso");
           router.push('/dashboard');
@@ -123,75 +83,46 @@ export default function LoginPage() {
 
         if (!twoFAEmail) {
           throw new Error(login.erro_identificar_email);
-          debugLogin("2FA email resolution failed");
         }
 
         // 🔐 SEMPRE ir para 2FA (obrigatório para todos os logins)
         try {
           // Solicitar código por email
           await api.post('/auth/2fa/email/request', { email: twoFAEmail }, { skipAuth: true });
-          debugLogin("2FA code request sent", { email: twoFAEmail });
           
           // Usar token resolvido como tempToken
           const tempToken = resolvedToken;
-          debugLogin("Redirecting to /auth/twofactor", {
-            email: twoFAEmail,
-            hasTempToken: Boolean(tempToken),
-            tempTokenPreview: tempToken ? `${tempToken.slice(0, 10)}...` : null,
-          });
           
           // Redirecionar para página 2FA
           router.push(`/auth/twofactor?email=${encodeURIComponent(twoFAEmail)}&tempToken=${encodeURIComponent(tempToken)}`);
           toast.info(login.codigo_enviado);
           return;
-        } catch (emailErr) {
-          console.error('Erro ao solicitar código 2FA:', emailErr);
+        } catch {
           toast.error(login.erro_enviar_codigo);
         }
       }
 
-      debugLogin("Login failed: unexpected response shape", {
-        success: response?.success,
-        hasAccessToken: Boolean(response?.data?.accessToken),
-      });
       throw new Error(login.erro);
     } catch (err: unknown) {
       const error = err as { message?: string };
       const message = error.message ?? login.erro;
-      debugLogin("Login catch", {
-        message,
-      });
       setError(message);
       toast.error(message);
     } finally {
-      debugLogin("Login flow finished");
       setLoading(false);
     }
   }
   const handleOAuthLogin = (provider: string) => {
     const configuredBase = process.env.NEXT_PUBLIC_AUTH_URL?.trim();
 
-    debugLogin("OAuth login click", {
-      provider,
-      configuredBase: configuredBase || null,
-    });
-
     if (configuredBase) {
       const normalizedBase = configuredBase.replace(/\/+$/, "");
       const authBase = normalizedBase.endsWith('/auth') ? normalizedBase : `${normalizedBase}/auth`;
-      debugLogin("OAuth redirect (configured base)", {
-        provider,
-        redirectUrl: `${authBase}/${provider}`,
-      });
       window.location.href = `${authBase}/${provider}`;
       return;
     }
 
     // Por padrão, usa o proxy interno do Next para chegar ao auth-service.
-    debugLogin("OAuth redirect (next proxy)", {
-      provider,
-      redirectUrl: `/api/auth/${provider}`,
-    });
     window.location.href = `/api/auth/${provider}`;
   };
 

@@ -22,8 +22,28 @@ export class CampaignsService {
     private readonly redis: RedisService,
     private readonly config: ConfigService,
   ) {
-    this.walletServiceUrl = this.config.get<string>('WALLET_SERVICE_URL', 'http://wallet-service:3005');
+    this.walletServiceUrl = this.config.get<string>('WALLET_SERVICE_URL', 'https://wallet-service:3005');
     this.internalApiKey = this.config.getOrThrow<string>('INTERNAL_API_KEY');
+  }
+
+  private normalizeAmount(value: unknown): number {
+    if (typeof value === 'number') {
+      return value;
+    }
+    if (value && typeof (value as { toString?: () => string }).toString === 'function') {
+      const parsed = Number((value as { toString: () => string }).toString());
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private normalizeCampaign<T extends { goalAmount: unknown; currentAmount: unknown }>(campaign: T): Omit<T, 'goalAmount' | 'currentAmount'> & { goalAmount: number; currentAmount: number } {
+    return {
+      ...campaign,
+      goalAmount: this.normalizeAmount(campaign.goalAmount),
+      currentAmount: this.normalizeAmount(campaign.currentAmount),
+    };
   }
 
   async create(userId: string, username: string, dto: CreateCampaignDto) {
@@ -98,7 +118,10 @@ export class CampaignsService {
       this.prisma.campaign.count({ where }),
     ]);
 
-    return { campaigns, meta: { total, page, limit, pages: Math.ceil(total / limit) } };
+    return {
+      campaigns: campaigns.map((campaign) => this.normalizeCampaign(campaign)),
+      meta: { total, page, limit, pages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: string, userId?: string) {
@@ -116,7 +139,7 @@ export class CampaignsService {
       if (!isMember) throw new ForbiddenException('This campaign is private');
     }
 
-    return campaign;
+    return this.normalizeCampaign(campaign);
   }
 
   async update(id: string, userId: string, dto: UpdateCampaignDto) {
@@ -152,9 +175,10 @@ export class CampaignsService {
   // ── Contribute ───────────────────────────────────────────
   // 1. Calls Wallet Service to debit funds (REST)
   // 2. Updates campaign currentAmount in local DB
-  // 3. Publishes contribution.completed event
+  // 3. Stores contribution record
+  // 4. Publishes contribution.completed event
 
-  async contribute(id: string, userId: string, dto: ContributeDto) {
+  async contribute(id: string, userId: string, username: string, dto: ContributeDto) {
     // Validate campaign state before calling Wallet Service
     const campaign = await this.prisma.campaign.findUnique({ where: { id } });
     if (!campaign) throw new NotFoundException('Campaign not found');
@@ -166,6 +190,8 @@ export class CampaignsService {
       });
       if (!isMember) throw new ForbiddenException('Only members can contribute to private campaigns');
     }
+
+    const normalizedMessage = dto.message?.trim() ? dto.message.trim() : null;
 
     // ── Step 1: Call Wallet Service to debit funds ──────────
     const walletPayload = {
@@ -191,8 +217,8 @@ export class CampaignsService {
       throw new BadRequestException(message);
     }
 
-    // ── Step 2: Update campaign progress (with saga compensation) ──
-    let result: { updated: any; goalReached: boolean };
+    // ── Step 2: Update campaign progress and store contribution (with saga compensation) ──
+    let result: { updated: any; goalReached: boolean; contribution: any };
     try {
       result = await this.prisma.$transaction(async (tx) => {
         const updated = await tx.campaign.update({
@@ -206,6 +232,18 @@ export class CampaignsService {
           throw new BadRequestException('Campaign is no longer active');
         }
 
+        // Store contribution record
+        const contribution = await tx.contribution.create({
+          data: {
+            campaignId: id,
+            userId,
+            username,
+            amount: dto.amount,
+            message: normalizedMessage,
+            isAnonymous: dto.isAnonymous ?? false,
+          },
+        });
+
         // Auto-complete if goal reached
         let goalReached = false;
         const newAmount = Number(updated.currentAmount);
@@ -214,7 +252,7 @@ export class CampaignsService {
           goalReached = true;
         }
 
-        return { updated, goalReached };
+        return { updated, goalReached, contribution };
       });
     } catch (dbError) {
       // ── Saga Compensation: refund wallet if campaign DB update failed ──
@@ -247,9 +285,12 @@ export class CampaignsService {
     // ── Step 3: Publish events outside the transaction ──────
     await this.redis.publish('campaign-events', 'contribution.completed', {
       campaignId: id,
+      contributionId: result.contribution.id,
       userId,
+      username: dto.isAnonymous ? 'Anónimo' : username,
       amount: dto.amount,
-      message: dto.message ?? null,
+      message: normalizedMessage,
+      isAnonymous: dto.isAnonymous ?? false,
     });
 
     if (result.goalReached) {
@@ -259,10 +300,80 @@ export class CampaignsService {
       });
     }
 
-    return { success: true, currentAmount: result.updated.currentAmount };
+    return { 
+      success: true, 
+      currentAmount: result.updated.currentAmount,
+      contribution: {
+        id: result.contribution.id,
+        amount: result.contribution.amount,
+        message: result.contribution.message,
+        isAnonymous: result.contribution.isAnonymous,
+        createdAt: result.contribution.createdAt,
+      },
+    };
   }
 
   // ── Members ──────────────────────────────────────────────
+
+  async getContributions(id: string, userId: string, page = 1, limit = 10) {
+    const campaign = await this.prisma.campaign.findUnique({ where: { id } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    if (campaign.isPrivate) {
+      const isMember = await this.prisma.campaignMember.findUnique({
+        where: { campaignId_userId: { campaignId: id, userId } },
+      });
+      if (!isMember) throw new ForbiddenException('This campaign is private');
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [contributions, total] = await Promise.all([
+      this.prisma.contribution.findMany({
+        where: { campaignId: id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          userId: true,
+          username: true,
+          amount: true,
+          message: true,
+          isAnonymous: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.contribution.count({ where: { campaignId: id } }),
+    ]);
+
+    // Map contributions to hide username if anonymous
+    const mappedContributions = contributions.map((c) => ({
+      id: c.id,
+      campaignId: id,
+      userId: c.isAnonymous ? null : c.userId,
+      username: c.isAnonymous ? 'Anónimo' : c.username,
+      amount: this.normalizeAmount(c.amount),
+      message: c.message,
+      isAnonymous: c.isAnonymous,
+      createdAt: c.createdAt,
+    }));
+
+    return {
+      contributions: mappedContributions,
+      data: mappedContributions,
+      meta: { 
+        total, 
+        page, 
+        limit, 
+        pages: Math.ceil(total / limit),
+      },
+      summary: {
+        currentAmount: this.normalizeAmount(campaign.currentAmount),
+        goalAmount: campaign.goalAmount ? this.normalizeAmount(campaign.goalAmount) : null,
+      },
+    };
+  }
 
   async getMembers(id: string, userId: string, page = 1, limit = 10) {
     // Verify the campaign exists and user has visibility
