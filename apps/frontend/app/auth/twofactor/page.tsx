@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Suspense, useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ShieldCheck, ArrowLeft, RefreshCw } from 'lucide-react'
 import { useI18n } from '@/locales/useI18n'
@@ -11,14 +11,6 @@ import { useAuth } from '@/contexts/auth'
 import { toast } from '@/utils/toast'
 
 const CODE_LENGTH = 6
-
-export default function Verificacao2FAPage() {
-  return (
-    <Suspense fallback={null}>
-      <Verificacao2FAContent />
-    </Suspense>
-  )
-}
 
 function Verificacao2FAContent() {
   const router = useRouter()
@@ -151,7 +143,6 @@ function Verificacao2FAContent() {
       await api.post('/auth/2fa/email/request', { email }, { skipAuth: true })
       toast.success(content.codigo_reenviado)
     } catch (err) {
-      console.error('Erro ao re-enviar código:', err)
       toast.error(content.erro_reenviar)
       setResendCooldown(0) // Reset cooldown em caso de erro
     }
@@ -226,11 +217,6 @@ function Verificacao2FAContent() {
                     }`}
                 />
               ))}
-                      return (
-                        <Suspense fallback={null}>
-                          <Verificacao2FAContent />
-                        </Suspense>
-                      )
             </div>
 
             {/* Error message */}
@@ -315,5 +301,19 @@ function Verificacao2FAContent() {
 
       </div>
     </motion.div>
+  )
+}
+
+export default function Verificacao2FAPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-vaks-light-bg dark:bg-vaks-dark-bg">
+        <div className="animate-pulse">
+          <AnimatedLogo size={48} />
+        </div>
+      </div>
+    }>
+      <Verificacao2FAContent />
+    </Suspense>
   )
 }

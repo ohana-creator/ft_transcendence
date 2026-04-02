@@ -10,6 +10,7 @@ import {
   SidebarBody,
   SidebarLinkItem,
   SidebarDropdown,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import {
   Home,
@@ -123,7 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   ]
 
   return (
-    <div className="flex h-screen w-full bg-vaks-light-primary dark:bg-vaks-dark-primary overflow-hidden">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-vaks-light-primary dark:bg-vaks-dark-primary overflow-hidden">
       <Sidebar open={open} setOpen={setOpen}>
         <SidebarBody className="justify-between gap-6">
           {/* Top section */}
@@ -174,7 +175,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </Sidebar>
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Nav />
         <main className="flex-1 overflow-y-auto">
             {children}
@@ -185,12 +186,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 }
 
 function Logo() {
+  const { open } = useSidebar()
+
   return (
     <Link
       href="/dashboard"
       className="flex items-center justify-center py-1 relative z-20"
     >
-      <AnimatedLogo variant="none" size={110} />
+      <AnimatedLogo variant="none" size={open ? 110 : 50} />
     </Link>
   )
 }

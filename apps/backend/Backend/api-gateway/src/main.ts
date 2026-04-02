@@ -2,12 +2,35 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { existsSync, readFileSync } from 'node:fs';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
+  const tlsCertPath = process.env.TLS_CERT_PATH;
+  const tlsKeyPath = process.env.TLS_KEY_PATH;
+  const httpsRequired = process.env.HTTPS_REQUIRED === 'true';
+
+  let adapter: FastifyAdapter;
+  if (tlsCertPath && tlsKeyPath) {
+    if (!existsSync(tlsCertPath) || !existsSync(tlsKeyPath)) {
+      throw new Error('TLS certificate files were not found. Check TLS_CERT_PATH and TLS_KEY_PATH.');
+    }
+    adapter = new FastifyAdapter({
+      https: {
+        cert: readFileSync(tlsCertPath),
+        key: readFileSync(tlsKeyPath),
+      },
+    });
+  } else {
+    if (httpsRequired) {
+      throw new Error('HTTPS is required but TLS_CERT_PATH/TLS_KEY_PATH are not configured.');
+    }
+    adapter = new FastifyAdapter();
+  }
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    adapter,
   );
 
   // ── CORS Configuration ──────────────────────────────────
@@ -19,10 +42,10 @@ async function bootstrap() {
     .filter(Boolean);
 
   const devOrigins = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
+    'https://localhost:3000',
+    'https://127.0.0.1:3000',
+    'https://localhost:5173',
+    'https://127.0.0.1:5173',
   ];
 
   const allowedOrigins =

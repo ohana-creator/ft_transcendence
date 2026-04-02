@@ -40,6 +40,12 @@ npm install
 
 **Run (development)**
 ```bash
+# Full stack with one command
+make
+
+# Reset backend databases and start again
+make reset-db
+
 # Full stack with hot-reload and exposed ports
 docker compose -f apps/backend/docker-compose.dev.yml up --build
 
@@ -53,7 +59,7 @@ docker compose -f apps/backend/docker-compose.yml up -d
 ```
 
 **Default access URLs**
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:3001
 - API Gateway: http://localhost:3000 (routes to services)
 - Auth: http://localhost:3001
 - Campaign: http://localhost:3002

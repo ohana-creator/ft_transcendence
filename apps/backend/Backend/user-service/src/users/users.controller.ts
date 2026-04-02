@@ -3,7 +3,7 @@ import {
   Param, Query, Body, Req,
   HttpCode, HttpStatus, UseGuards,
   ForbiddenException, BadRequestException,
-  Header,
+  Header, ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -70,6 +70,46 @@ export class UsersController {
       ? req.headers.authorization
       : undefined;
     return this.usersService.getContributionYears(authHeader);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('heartbeat')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send heartbeat to indicate user is online' })
+  sendHeartbeat(@CurrentUser() user: { userId: string }) {
+    return this.usersService.recordHeartbeat(user.userId);
+  }
+
+  @Get('online-status')
+  @ApiOperation({ summary: 'Get list of online users (last heartbeat within 60 seconds)' })
+  getOnlineStatus(
+    @Query('limit', new ParseIntPipe({ optional: true })) limit = 100,
+    @Query('ids') ids?: string,
+  ) {
+    const parsedIds = typeof ids === 'string'
+      ? ids.split(',').map((value) => value.trim()).filter(Boolean)
+      : undefined;
+    return this.usersService.getOnlineUsers(limit, parsedIds);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/settings')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get account settings for authenticated user' })
+  getMySettings(@CurrentUser() user: { userId: string }) {
+    return this.usersService.getSettings(user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/settings')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get account settings (compat: id in path is ignored)' })
+  getSettings(
+    @Param('id') _id: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.usersService.getSettings(user.userId);
   }
 
   @Get(':id')

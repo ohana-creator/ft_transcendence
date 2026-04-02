@@ -224,7 +224,7 @@ export default function CriarVaquinhaPublicaPage() {
       const campaign = await createCampaign(campaignPayload);
       if (IMAGE_DEBUG) {
       }
-      router.push(`/vaquinhas/${campaign.id}`);
+      router.push(campaign.isPrivate ? `/vaquinhas/privadas/${campaign.id}` : `/vaquinhas/${campaign.id}`);
     } catch (error) {
       if (IMAGE_DEBUG) {
       }

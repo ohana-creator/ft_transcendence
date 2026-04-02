@@ -131,7 +131,7 @@ export class CampaignsController {
   }
 
   @Get()
-  @Header('Cache-Control', 'public, max-age=300')
+  @Header('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
   @ApiOperation({ summary: 'List campaigns (public + private where member)' })
   findAll(
     @Query() dto: ListCampaignsDto,
@@ -141,7 +141,7 @@ export class CampaignsController {
   }
 
   @Get(':id')
-  @Header('Cache-Control', 'public, max-age=600')
+  @Header('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
   @ApiOperation({ summary: 'Get campaign details' })
   findOne(@Param('id') id: string, @CurrentUser() user: { userId: string }) {
     return this.campaignsService.findOne(id, user.userId);
@@ -167,10 +167,22 @@ export class CampaignsController {
   @ApiOperation({ summary: 'Contribute to campaign' })
   contribute(
     @Param('id') id: string,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: { userId: string; username: string },
     @Body() dto: ContributeDto,
   ) {
-    return this.campaignsService.contribute(id, user.userId, dto);
+    return this.campaignsService.contribute(id, user.userId, user.username, dto);
+  }
+
+  @Get(':id/contributions')
+  @Header('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+  @ApiOperation({ summary: 'List campaign contributions (compat endpoint)' })
+  getContributions(
+    @Param('id') id: string,
+    @CurrentUser() user: { userId: string },
+    @Query('page', new ParseIntPipe({ optional: true })) page = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit = 10,
+  ) {
+    return this.campaignsService.getContributions(id, user.userId, page, limit);
   }
 
   // Members

@@ -25,6 +25,22 @@ Each `.txt` file contains a single secret value (no trailing newline).
 | `r2_access_key_id.txt`        | user-service                     |
 | `r2_secret_access_key.txt`    | user-service                     |
 
+## TLS for backend HTTPS
+
+The backend now requires HTTPS in all API services. Generate local certificates before starting Docker Compose:
+
+```bash
+./scripts/generate-backend-tls.sh
+```
+
+This creates the following files in `secrets/tls/`:
+
+- `ca.crt` (certificate authority used by services)
+- `backend.crt` (server certificate shared by backend services)
+- `backend.key` (private key)
+
+If your browser warns about local HTTPS, import `secrets/tls/ca.crt` into your OS/browser trust store.
+
 ### How to generate strong passwords
 
 ```bash

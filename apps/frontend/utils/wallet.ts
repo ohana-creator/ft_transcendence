@@ -1,5 +1,6 @@
 import { api } from '@/utils/api/api';
 import { Carteira, Transacao } from '@/types';
+import { kzsToVaks } from '@/utils/currency';
 
 const WALLET_TOPUP_DEBUG_PREFIX = '[WalletTopupDebug]';
 
@@ -374,20 +375,23 @@ export async function carregarCarteira(payload: {
   method: TopupMethod;
   mode?: TopupMode;
 }): Promise<TopupResult> {
-  const amount = toNumber(payload.amountKzs);
+  const amountKzs = toNumber(payload.amountKzs);
+  const amountVaks = kzsToVaks(amountKzs);
+  
   walletTopupLog('carregarCarteira:start', {
-    amount,
+    amountKzs,
+    amountVaks,
     method: payload.method,
     mode: payload.mode || 'checkout',
   });
 
-  if (amount <= 0) {
-    walletTopupLog('carregarCarteira:invalid-amount', { amount });
+  if (amountKzs <= 0) {
+    walletTopupLog('carregarCarteira:invalid-amount', { amountKzs });
     throw new Error('Valor invalido para carregamento.');
   }
 
   const requestPayload = {
-    amount,
+    amount: amountVaks,
     paymentMethod: mapTopupMethod(payload.method),
     mode: payload.mode || 'checkout',
   };

@@ -23,6 +23,16 @@ model User {
   friendshipsAsB         Friendship[]    @relation("FriendshipsAsB")
   blocksMade             Block[]         @relation("BlocksMade")
   blocksReceived         Block[]         @relation("BlocksReceived")
+  heartbeat              UserHeartbeat?
+}
+
+model UserHeartbeat {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastSeen  DateTime @default(now()) @updatedAt
+
+  @@index([lastSeen])
 }
 
 model FriendRequest {

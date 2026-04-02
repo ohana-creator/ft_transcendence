@@ -28,7 +28,7 @@ export class CampaignImageService {
   constructor(private readonly config: ConfigService) {
     this.storageMode = this.config.get<'local' | 'r2'>('CAMPAIGN_IMAGE_STORAGE', 'local');
     this.uploadsDir = this.config.get<string>('CAMPAIGN_UPLOADS_DIR', 'uploads');
-    this.publicBaseUrl = this.config.get<string>('CAMPAIGN_PUBLIC_BASE_URL', 'http://localhost:3000');
+    this.publicBaseUrl = this.config.get<string>('CAMPAIGN_PUBLIC_BASE_URL', 'https://localhost:3000');
 
     this.bucket = this.config.get<string>('R2_BUCKET', '');
     this.publicUrl = this.config.get<string>('R2_PUBLIC_URL', '');

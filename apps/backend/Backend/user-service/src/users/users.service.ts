@@ -48,6 +48,36 @@ export class UsersService {
     return user;
   }
 
+  async getSettings(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        avatarUrl: true,
+        bio: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+    return {
+      success: true,
+      data: {
+        account: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          avatarUrl: user.avatarUrl,
+          bio: user.bio,
+        },
+      },
+    };
+    return user;
+  }
+
   async update(id: string, dto: UpdateUserDto) {
     await this.findById(id);
 
@@ -585,17 +615,27 @@ export class UsersService {
         url.searchParams.set('type', type);
       }
 
-      const response = await fetch(url, {
-        headers: {
-          authorization: authHeader,
-        },
-      });
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: {
+            authorization: authHeader,
+          },
+        });
+      } catch {
+        break;
+      }
 
       if (!response.ok) {
         break;
       }
 
-      const payload = (await response.json()) as WalletTransactionsResponse;
+      let payload: WalletTransactionsResponse;
+      try {
+        payload = (await response.json()) as WalletTransactionsResponse;
+      } catch {
+        break;
+      }
       if (Array.isArray(payload.data)) {
         transactions.push(...payload.data);
       }
@@ -627,5 +667,62 @@ export class UsersService {
       year: 'numeric',
     });
     return Number(formatter.format(date));
+  }
+
+  // ── Online Status Tracking ───────────────────────────────
+
+  async recordHeartbeat(userId: string) {
+    await this.findById(userId);
+    const heartbeat = await this.prisma.userHeartbeat.upsert({
+      where: { userId },
+      update: { lastSeen: new Date() },
+      create: { userId, lastSeen: new Date() },
+    });
+
+    return {
+      success: true,
+      data: { userId, lastSeen: heartbeat.lastSeen },
+    };
+  }
+
+  async getOnlineUsers(limit = 100, ids?: string[]) {
+    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+
+    const normalizedIds = Array.isArray(ids)
+      ? Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)))
+      : [];
+
+    const heartbeats = await this.prisma.userHeartbeat.findMany({
+      where: {
+        lastSeen: { gte: sixtySecondsAgo },
+        ...(normalizedIds.length ? { userId: { in: normalizedIds } } : {}),
+      },
+      include: {
+        user: {
+          select: { id: true, username: true, avatarUrl: true },
+        },
+      },
+      orderBy: { lastSeen: 'desc' },
+      take: limit,
+    });
+
+    const onlineUsers = heartbeats.map((hb) => ({
+      id: hb.user.id,
+      username: hb.user.username,
+      avatarUrl: hb.user.avatarUrl,
+      lastSeen: hb.lastSeen,
+    }));
+
+    return {
+      success: true,
+      onlineUsers,
+      count: onlineUsers.length,
+      timestamp: new Date(),
+      data: {
+        onlineUsers,
+        count: onlineUsers.length,
+        timestamp: new Date(),
+      },
+    };
   }
 }

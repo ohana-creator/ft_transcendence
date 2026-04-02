@@ -1,35 +1,21 @@
 'use client';
 
 import { useI18n } from "@/locales";
-import { useTheme } from "next-themes";
 import Image from "next/image";
 import loginRegisterImage from "../../../public/login_register.png";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Mail, Eye, EyeOff, User, Phone, Calendar, Facebook } from "lucide-react";
+import { Mail, Eye, EyeOff, User } from "lucide-react";
 import { AppInput } from "@/components/auth/app-input";
 import Link from "next/link";
 import { api } from "@/utils/api/api";
 import { toast } from "@/utils/toast";
 
-const DEBUG_LOGIN = process.env.NEXT_PUBLIC_DEBUG_LOGIN === "true";
-
-function debugRegister(message: string, data?: Record<string, unknown>) {
-  if (!DEBUG_LOGIN) return;
-  if (typeof window === "undefined") return;
-  const stamp = new Date().toISOString();
-  if (data) {
-    console.log(`[REGISTER-DEBUG ${stamp}] ${message}`, data);
-    return;
-  }
-  console.log(`[REGISTER-DEBUG ${stamp}] ${message}`);
-}
 
 export default function RegisterPage() {
   const router = useRouter();
   const { t } = useI18n();
   const register = t.registar;
-  const { theme } = useTheme();
 
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -62,18 +48,8 @@ export default function RegisterPage() {
   }
 
   async function handleRegister() {
-      const startedAt = Date.now();
-    debugRegister("Register submit", {
-      email,
-      username,
-      passwordLength: password.length,
-      confirmPasswordLength: confirmPassword.length,
-      agreed,
-    });
-
     if (!agreed) {
       const message = register.erro_termos;
-      debugRegister("Register blocked: terms not accepted");
       setError(message);
       toast.error(message);
       return;
@@ -81,7 +57,6 @@ export default function RegisterPage() {
 
     const validationError = validate();
     if (validationError) {
-      debugRegister("Register blocked: validation error", { validationError });
       setError(validationError);
       toast.error(validationError);
       return;
@@ -97,42 +72,9 @@ export default function RegisterPage() {
         password,
       };
 
-      debugRegister("Register request start", {
-        method: 'POST',
-        endpoint: '/auth/register',
-        baseUrl: api.getBaseUrl(),
-        payloadPreview: {
-          email,
-          username,
-          hasPassword: Boolean(password),
-        },
-      });
-
-      const response = await api.post('/auth/register', payload, { skipAuth: true });
-      const durationMs = Date.now() - startedAt;
-      const responseObj = (response && typeof response === 'object') ? (response as Record<string, unknown>) : null;
-      const responseData = responseObj?.data;
-      const dataObj =
-        responseData && typeof responseData === 'object'
-          ? (responseData as Record<string, unknown>)
-          : null;
-
-      debugRegister("/auth/register response", {
-        hasResponse: Boolean(response),
-        durationMs,
-        success: responseObj?.success ?? null,
-        message: responseObj?.message ?? null,
-        responseKeys: responseObj ? Object.keys(responseObj) : [],
-        dataKeys: dataObj ? Object.keys(dataObj) : [],
-        createdUserId: dataObj?.id ?? null,
-        createdEmail: dataObj?.email ?? null,
-        createdUsername: dataObj?.username ?? null,
-      });
+      await api.post('/auth/register', payload, { skipAuth: true });
 
       toast.success(register.sucesso);
-      debugRegister("Register success, redirecting to /dashboard", {
-        durationMs,
-      });
       router.push('/dashboard');
     } catch (err: unknown) {
       const error = err as {
@@ -140,21 +82,13 @@ export default function RegisterPage() {
         message?: string | string[];
         errors?: Record<string, string[]>;
       };
-      const durationMs = Date.now() - startedAt;
       const normalizedMessage = Array.isArray(error?.message)
         ? error.message.join(' | ')
         : error?.message;
       const message = normalizedMessage ?? t.registar.erro;
-      debugRegister("Register catch", {
-        durationMs,
-        status: error?.status ?? null,
-        message: normalizedMessage ?? null,
-        errors: error?.errors ?? null,
-      });
       setError(message);
       toast.error(message);
     } finally {
-      debugRegister("Register flow finished");
       setLoading(false);
     }
   }
@@ -162,27 +96,14 @@ export default function RegisterPage() {
   const handleOAuthRegister = (provider: string) => {
     const configuredBase = process.env.NEXT_PUBLIC_AUTH_URL?.trim();
 
-    debugRegister("OAuth register click", {
-      provider,
-      configuredBase: configuredBase || null,
-    });
-
     if (configuredBase) {
       const normalizedBase = configuredBase.replace(/\/+$/, "");
       const authBase = normalizedBase.endsWith('/auth') ? normalizedBase : `${normalizedBase}/auth`;
-      debugRegister("OAuth register redirect (configured base)", {
-        provider,
-        redirectUrl: `${authBase}/${provider}`,
-      });
       window.location.href = `${authBase}/${provider}`;
       return;
     }
 
     // Por padrão, usa o proxy interno do Next para chegar ao auth-service.
-    debugRegister("OAuth register redirect (next proxy)", {
-      provider,
-      redirectUrl: `/api/auth/${provider}`,
-    });
     window.location.href = `/api/auth/${provider}`;
   }
 

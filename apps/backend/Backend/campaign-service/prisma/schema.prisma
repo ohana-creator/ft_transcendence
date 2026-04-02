@@ -26,10 +26,27 @@ model Campaign {
   closedAt      DateTime?
   members       CampaignMember[]
   invitations   Invitation[]
+  contributions Contribution[]
 
   @@index([ownerId])
   @@index([status])
   @@index([isPrivate])
+}
+
+model Contribution {
+  id          String   @id @default(uuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId      String
+  username    String
+  amount      Decimal  @db.Decimal(18, 2)
+  message     String?
+  isAnonymous Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model CampaignMember {

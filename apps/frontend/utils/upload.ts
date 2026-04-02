@@ -70,9 +70,9 @@ function toAbsoluteImageUrl(url: string, baseUrl: string): string {
     }
   };
 
-  // Ex.: "localhost:3001/uploads/x.jpg" -> "http://127.0.0.1:3001/uploads/x.jpg"
+  // Ex.: "localhost:3001/uploads/x.jpg" -> "https://127.0.0.1:3001/uploads/x.jpg"
   if (/^localhost:\d+\//i.test(trimmed)) {
-    return normalizeHost(`http://${trimmed}`);
+    return normalizeHost(`https://${trimmed}`);
   }
 
   if (/^https?:\/\//i.test(trimmed)) {

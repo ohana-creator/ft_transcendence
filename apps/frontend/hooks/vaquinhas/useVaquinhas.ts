@@ -220,12 +220,48 @@ function transformCampaignToVaquinha(campaigns: Campaign[], options?: { includeP
       const categoria = Object.keys(categoriaMap).find((key) => campaign.title.toLowerCase().includes(key.toLowerCase())) || 'Comunidade';
 
       // Procura por imagem em diferentes campos possíveis
+      const apiBaseUrl = api.getBaseUrl();
+
+      const resolveApiOrigin = (): string => {
+        try {
+          return new URL(apiBaseUrl).origin;
+        } catch {
+          if (typeof window !== 'undefined') return window.location.origin;
+          return 'http://localhost:3000';
+        }
+      };
+
       const normalizeImagePath = (value?: string): string | undefined => {
         if (!value) return undefined;
-        if (value.includes('/api/campaigns/')) {
-          return value.replace('/api/campaigns/', '/uploads/campaigns/');
+
+        const trimmed = value.trim();
+        if (!trimmed) return undefined;
+
+        const rewriteCampaignPath = (path: string): string => {
+          if (path.startsWith('/api/campaigns/')) {
+            return path.replace('/api/campaigns/', '/uploads/campaigns/');
+          }
+          if (path.startsWith('api/campaigns/')) {
+            return path.replace('api/campaigns/', '/uploads/campaigns/');
+          }
+          return path;
+        };
+
+        if (/^https?:\/\//i.test(trimmed)) {
+          try {
+            const parsed = new URL(trimmed);
+            parsed.pathname = rewriteCampaignPath(parsed.pathname);
+            return parsed.toString();
+          } catch {
+            return trimmed;
+          }
         }
-        return value;
+
+        try {
+          return new URL(rewriteCampaignPath(trimmed), resolveApiOrigin()).toString();
+        } catch {
+          return rewriteCampaignPath(trimmed);
+        }
       };
 
       const imagem =
@@ -270,13 +306,47 @@ export function useVaquinhaDetalhe(id?: string) {
         const meta = decimalToNumber(data.goalAmount) || 0;
         const arrecadado = decimalToNumber(data.currentAmount) || 0;
 
+        const normalizeImagePath = (value?: string): string | undefined => {
+          if (!value) return undefined;
+
+          const trimmed = value.trim();
+          if (!trimmed) return undefined;
+
+          const rewriteCampaignPath = (path: string): string => {
+            if (path.startsWith('/api/campaigns/')) {
+              return path.replace('/api/campaigns/', '/uploads/campaigns/');
+            }
+            if (path.startsWith('api/campaigns/')) {
+              return path.replace('api/campaigns/', '/uploads/campaigns/');
+            }
+            return path;
+          };
+
+          if (/^https?:\/\//i.test(trimmed)) {
+            try {
+              const parsed = new URL(trimmed);
+              parsed.pathname = rewriteCampaignPath(parsed.pathname);
+              return parsed.toString();
+            } catch {
+              return trimmed;
+            }
+          }
+
+          try {
+            const apiOrigin = new URL(api.getBaseUrl()).origin;
+            return new URL(rewriteCampaignPath(trimmed), apiOrigin).toString();
+          } catch {
+            return rewriteCampaignPath(trimmed);
+          }
+        };
+
         const vaquinha = {
           id: data.id,
           titulo: data.title,
           descricao: data.description,
           meta,
           arrecadado,
-          imagemUrl: data.imageUrl || data.image || data.picture,
+          imagemUrl: normalizeImagePath(data.imageUrl || data.image || data.picture),
           categoria: 'Comunidade',
           publica: !data.isPrivate,
           ativa: data.status === 'ACTIVE',
@@ -304,4 +374,166 @@ export function useVaquinhaDetalhe(id?: string) {
   }, [id]);
 
   return { vaquinha, loading, error, contribuicoes: [] };
+}
+
+// Interface for user campaign with role
+export interface UserCampaignWithRole {
+  id: string;
+  title: string;
+  description: string;
+  isPrivate: boolean;
+  goalAmount: number;
+  currentAmount: number;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | string;
+  createdAt: string;
+  ownerId: string;
+  ownerUsername: string;
+  memberCount: number;
+  role: 'OWNER' | 'SUDO' | 'VAKER';
+  imageUrl?: string;
+}
+
+// Hook to fetch user's campaigns (where user is owner or member) with their roles
+export function useUserCampaigns(userId?: string, username?: string) {
+  const [campaigns, setCampaigns] = useState<UserCampaignWithRole[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userId && !username) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchUserCampaigns = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch all campaigns (API returns public + private where user is member)
+        const response = await api.get<{ campaigns: Campaign[]; meta: any }>('/campaigns', {
+          params: { limit: 100 },
+        });
+
+        const allCampaigns = response.campaigns || [];
+
+        // Normalize identifiers for comparison
+        const normalizeId = (value?: string): string => (value || '').trim().replace(/^@/, '').toLowerCase();
+        const normalizedUserId = normalizeId(userId);
+        const normalizedUsername = normalizeId(username);
+
+        const isSameUser = (candidateId?: string, candidateUsername?: string): boolean => {
+          const normalizedCandidateId = normalizeId(candidateId);
+          const normalizedCandidateUsername = normalizeId(candidateUsername);
+          
+          return (
+            (!!normalizedUserId && !!normalizedCandidateId && normalizedUserId === normalizedCandidateId) ||
+            (!!normalizedUsername && !!normalizedCandidateUsername && normalizedUsername === normalizedCandidateUsername)
+          );
+        };
+
+        // For each campaign, determine user's role
+        const userCampaigns: UserCampaignWithRole[] = [];
+
+        // Batch fetch members for all campaigns in parallel (max 10 at a time)
+        const batchSize = 10;
+        const membersByCampaign = new Map<string, Array<{ userId?: string; username?: string; role?: string }>>();
+
+        for (let i = 0; i < allCampaigns.length; i += batchSize) {
+          const batch = allCampaigns.slice(i, i + batchSize);
+          const membersPromises = batch.map(async (campaign) => {
+            // If campaign already has members array, use it
+            if (Array.isArray(campaign.members) && campaign.members.length > 0) {
+              return { campaignId: campaign.id, members: campaign.members };
+            }
+            // Otherwise fetch members
+            try {
+              const membersResponse = await api.get<{ members?: Array<{ userId?: string; username?: string; role?: string }> }>(
+                `/campaigns/${campaign.id}/members`,
+                { params: { page: 1, limit: 100 } }
+              );
+              const members = membersResponse.members || 
+                (membersResponse as any).data?.members || 
+                (Array.isArray((membersResponse as any).data) ? (membersResponse as any).data : []);
+              return { campaignId: campaign.id, members };
+            } catch {
+              return { campaignId: campaign.id, members: [] };
+            }
+          });
+
+          const results = await Promise.all(membersPromises);
+          results.forEach(({ campaignId, members }) => {
+            membersByCampaign.set(campaignId, members);
+          });
+        }
+
+        // Now process each campaign to determine user role
+        for (const campaign of allCampaigns) {
+          let role: 'OWNER' | 'SUDO' | 'VAKER' | null = null;
+
+          // Check if user is owner
+          if (isSameUser(campaign.ownerId, campaign.ownerUsername)) {
+            role = 'OWNER';
+          } else {
+            // Check in members
+            const members = membersByCampaign.get(campaign.id) || campaign.members || [];
+            const member = members.find((m: any) => isSameUser(m.userId, m.username));
+            if (member) {
+              role = (member as any).role === 'SUDO' ? 'SUDO' : 'VAKER';
+            }
+          }
+
+          // If user has a role in this campaign, add it to the list
+          if (role) {
+            userCampaigns.push({
+              id: campaign.id,
+              title: campaign.title,
+              description: campaign.description,
+              isPrivate: campaign.isPrivate,
+              goalAmount: decimalToNumber(campaign.goalAmount),
+              currentAmount: decimalToNumber(campaign.currentAmount),
+              status: campaign.status,
+              createdAt: campaign.createdAt,
+              ownerId: campaign.ownerId,
+              ownerUsername: campaign.ownerUsername,
+              memberCount: campaign._count?.members || membersByCampaign.get(campaign.id)?.length || campaign.members?.length || 1,
+              role,
+              imageUrl: campaign.imageUrl || campaign.image || campaign.picture,
+            });
+          }
+        }
+
+        if (cancelled) return;
+        setCampaigns(userCampaigns);
+      } catch (err: any) {
+        if (cancelled) return;
+        setError(err?.message || 'Error loading user campaigns');
+        setCampaigns([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchUserCampaigns();
+
+    // Re-fetch when invitation is accepted or window gets focus
+    const handleRefresh = () => fetchUserCampaigns();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('campaign:invitation-accepted', handleRefresh);
+      window.addEventListener('focus', handleRefresh);
+    }
+
+    return () => {
+      cancelled = true;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('campaign:invitation-accepted', handleRefresh);
+        window.removeEventListener('focus', handleRefresh);
+      }
+    };
+  }, [userId, username]);
+
+  return { campaigns, loading, error };
 }

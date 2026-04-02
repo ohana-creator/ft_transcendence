@@ -206,6 +206,46 @@ export class AuthService {
     return { success: true, data: user };
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        authProvider: true,
+        hashedPassword: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.hashedPassword) {
+      throw new BadRequestException('Password change is only available for local accounts');
+    }
+
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.hashedPassword);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid current password');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { hashedPassword },
+    });
+
+    this.logger.log(`Password changed for user ${user.email}`);
+
+    return {
+      success: true,
+      message: 'Password updated successfully',
+    };
+  }
+
   // ── 2FA: Setup ───────────────────────────────────────────
 
   async setup2FA(userId: string) {

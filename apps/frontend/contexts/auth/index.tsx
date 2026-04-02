@@ -1,11 +1,12 @@
 'use client';
 
-import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import { ApiClient, api } from '@/utils/api/api';
 
 const USER_KEY = 'vaks_user';
 const AVATAR_KEY = 'vaks:avatar';
 const DEBUG_LOGIN = process.env.NEXT_PUBLIC_DEBUG_LOGIN === 'true';
+const HEARTBEAT_INTERVAL = 30000; // 30 segundos
 
 // ── Types ───────────────────────────────────────────────
 
@@ -17,6 +18,13 @@ interface User {
   avatarUrl?: string;
 }
 
+interface PrivacySettings {
+  profilePublic: boolean;
+  showBalance: boolean;
+  showContributions: boolean;
+  showCampaigns: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -24,6 +32,8 @@ interface AuthContextType {
   login: (token: string, user?: unknown) => void;
   logout: () => void;
   setUser: (user: User | null) => void;
+  privacySettings: PrivacySettings | null;
+  setPrivacySettings: (settings: PrivacySettings | null) => void;
 }
 
 function asString(value: unknown): string | undefined {
@@ -102,6 +112,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [privacySettings, setPrivacySettingsState] = useState<PrivacySettings | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Enviar heartbeat para manter status online
+  const sendHeartbeat = useCallback(async () => {
+    if (!ApiClient.isAuthenticated()) return;
+    try {
+      await api.post('/users/heartbeat', {
+        userId: user?.id,
+        username: user?.username,
+        email: user?.email,
+      });
+    } catch {
+      // Silenciosamente ignora erros de heartbeat (endpoint pode não existir)
+    }
+  }, [user?.email, user?.id, user?.username]);
+
+  // Iniciar heartbeat quando autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Enviar heartbeat imediatamente
+      sendHeartbeat();
+      
+      // Configurar intervalo para enviar heartbeat a cada 30 segundos
+      heartbeatIntervalRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+      
+      // Enviar heartbeat quando a janela ganha foco (utilizador voltou)
+      const handleFocus = () => sendHeartbeat();
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          sendHeartbeat();
+        }
+      };
+      
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      return () => {
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+        }
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [isAuthenticated, sendHeartbeat]);
 
   const withStoredAvatar = useCallback((userData: User | null): User | null => {
     if (!userData || typeof window === 'undefined') return userData;
@@ -135,6 +191,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const rawUser = response?.data?.user || response?.data;
       const normalizedUser = normalizeUserPayload(rawUser);
       setUser(normalizedUser);
+
+      if (normalizedUser?.id) {
+        try {
+          const settingsResponse = await api.get<{
+            data?: { privacy?: Partial<PrivacySettings> };
+            privacy?: Partial<PrivacySettings>;
+          }>(`/users/${normalizedUser.id}/settings`);
+
+          const payload = settingsResponse?.data || settingsResponse;
+          const privacy = payload?.privacy;
+          setPrivacySettingsState({
+            profilePublic: privacy?.profilePublic ?? true,
+            showBalance: privacy?.showBalance ?? false,
+            showContributions: privacy?.showContributions ?? true,
+            showCampaigns: privacy?.showCampaigns ?? true,
+          });
+        } catch {
+          setPrivacySettingsState(null);
+        }
+      } else {
+        setPrivacySettingsState(null);
+      }
     } catch {
       // Não limpar sessão aqui para evitar logout falso por falha transitória.
     }
@@ -148,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') {
       if (!hasToken) {
         localStorage.removeItem(USER_KEY);
+        setPrivacySettingsState(null);
       } else {
         const persistedUser = localStorage.getItem(USER_KEY);
         if (persistedUser) {
@@ -169,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const handleAuthLogout = () => {
         setIsAuthenticated(false);
         setUserState(null);
+        setPrivacySettingsState(null);
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(AVATAR_KEY);
       };
@@ -219,17 +299,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ApiClient.setToken(token);
     setIsAuthenticated(true);
     const normalizedUser = normalizeUserPayload(userData) || normalizeUserPayload(decodeTokenPayload(token));
-    if (DEBUG_LOGIN) {
-      console.log('[AUTH-DEBUG] login normalization', {
-        hasUserInput: Boolean(userData),
-        hasNormalizedUser: Boolean(normalizedUser),
-      });
-    }
     if (normalizedUser) {
       setUser(normalizedUser);
+      setPrivacySettingsState(null);
       void fetchCurrentUser();
       return;
     }
+    setPrivacySettingsState(null);
     void fetchCurrentUser();
   }, [fetchCurrentUser, setUser]);
 
@@ -250,6 +326,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     setUser,
+    privacySettings,
+    setPrivacySettings: setPrivacySettingsState,
   };
 
   return (

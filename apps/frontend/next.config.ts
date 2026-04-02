@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
+const apiGatewayInternalUrl = process.env.API_GATEWAY_INTERNAL_URL || 'http://localhost:3000';
+
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
 const nextConfig: NextConfig = {
+  output: 'standalone',
   images: {
     // Cache de imagens externas por 24 horas (86400 segundos)
     minimumCacheTTL: 86400,
@@ -69,14 +76,24 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    const backendBaseUrl = normalizeBaseUrl(apiGatewayInternalUrl);
+
     return [
       {
         source: '/uploads/:path*',
-        destination: 'http://localhost:3000/uploads/:path*',
+        destination: `${backendBaseUrl}/uploads/:path*`,
+      },
+      {
+        source: '/api/users/heartbeat',
+        destination: `${backendBaseUrl}/users/heartbeat`,
+      },
+      {
+        source: '/api/users/online-status',
+        destination: `${backendBaseUrl}/users/online-status`,
       },
       {
         source: '/api/:path*',
-        destination: 'http://localhost:3000/:path*',
+        destination: `${backendBaseUrl}/:path*`,
       },
     ];
   },

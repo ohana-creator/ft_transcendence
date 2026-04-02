@@ -3,16 +3,17 @@
 import { useI18n } from "@/locales/useI18n";
 import {  useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Bell, Lock, Palette, Sun, Moon, ChevronRight, Eye, EyeOff, Trash2 } from "lucide-react";
+import { User, Lock, Palette, Sun, Moon, Eye, EyeOff, Trash2, Loader2, AlertTriangle, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { TranslationKeys } from "@/locales/pt";
 import { VaksMascot } from "@/components/config/mascot";
 import { api } from "@/utils/api/api";
 import { useAuth } from "@/contexts/auth";
+import { useRouter } from "next/navigation";
 import { toast } from "@/utils/toast";
 
 // ─── TIPOS ───
-type SettingsSection = "account" | "notifications" | "privacy" | "appearance";
+type SettingsSection = "account" | "privacy" | "appearance";
 type LocaleKey = "pt" | "en" | "es" | "fr";
 
 type UserData = {
@@ -53,6 +54,7 @@ type SettingsApiData = {
     profilePublic?: boolean;
     showBalance?: boolean;
     showContributions?: boolean;
+    showCampaigns?: boolean;
   };
   appearance?: {
     theme?: string;
@@ -85,6 +87,7 @@ const DEFAULT_SETTINGS: Required<SettingsApiData> = {
   },
   privacy: {
     profilePublic: true,
+    showCampaigns: true,
     showBalance: false,
     showContributions: true,
   },
@@ -96,7 +99,6 @@ const DEFAULT_SETTINGS: Required<SettingsApiData> = {
 
 const getMenuItems = (settings: TranslationKeys['configuration']) => [
   { label: settings.conta.titulo, key: "account" as SettingsSection, icon: User },
-  { label: settings.notificacoes.titulo, key: "notifications" as SettingsSection, icon: Bell },
   { label: settings.privacidade.titulo, key: "privacy" as SettingsSection, icon: Lock },
   { label: settings.aparencia.titulo, key: "appearance" as SettingsSection, icon: Palette },
 ];
@@ -136,7 +138,7 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
   return (
     <button
       onClick={() => onChange(!enabled)}
-      className={`relative w-11 h-6 rounded-full transition-colors duration-300 flex-shrink-0
+      className={`relative w-11 h-6 rounded-full transition-colors duration-300 shrink-0
         ${enabled
           ? "bg-vaks-light-purple-button dark:bg-vaks-dark-purple-button"
           : "bg-vaks-blue-charcoal"
@@ -229,11 +231,17 @@ function AccountSection({
   onAccountChange,
   onSave,
   saving,
+  onChangePassword,
+  passwordSaving,
+  onDeleteAccount,
 }: {
   account: UserData;
   onAccountChange: (next: UserData) => void;
   onSave: () => void;
   saving: boolean;
+  onChangePassword: (payload: { currentPassword: string; newPassword: string; confirmPassword: string }) => Promise<boolean>;
+  passwordSaving: boolean;
+  onDeleteAccount: () => void;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -299,8 +307,27 @@ function AccountSection({
         <SettingsInput label={config.conta.card2.nova_senha} value={newPassword} onChange={setNewPassword} type="password" placeholder="••••••••" />
         <SettingsInput label={config.conta.card2.confirmar_senha} value={confirmPassword} onChange={setConfirmPassword} type="password" placeholder="••••••••" />
         <div className="py-3 flex justify-end">
-          <button className="px-5 py-2 rounded-xl text-sm font-semibold bg-vaks-light-purple-button dark:bg-vaks-dark-purple-button text-white hover:opacity-90 transition-opacity">
-            {config.conta.card2.guardar}
+          <button
+            onClick={async () => {
+              const success = await onChangePassword({ currentPassword, newPassword, confirmPassword });
+              if (success) {
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setShowPassword(false);
+              }
+            }}
+            disabled={passwordSaving}
+            className="px-5 py-2 rounded-xl text-sm font-semibold bg-vaks-light-purple-button dark:bg-vaks-dark-purple-button text-white hover:opacity-90 disabled:opacity-60 transition-opacity"
+          >
+            {passwordSaving ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {config.conta.card2.carregando}
+              </span>
+            ) : (
+              config.conta.card2.guardar
+            )}
           </button>
         </div>
       </SettingsCard>
@@ -311,100 +338,8 @@ function AccountSection({
           label={config.conta.card3.eliminar_conta}
           description={config.conta.card3.info}
         >
-          <DangerButton label={config.conta.card3.confirmar} onClick={() => {}} />
+          <DangerButton label={config.conta.card3.confirmar} onClick={onDeleteAccount} />
         </SettingRow>
-      </SettingsCard>
-    </div>
-  );
-}
-
-/**
- * SECÇÃO: NOTIFICAÇÕES
- * Para adicionar uma notificação: adiciona um SettingRow com um Toggle.
- * O state é um objeto — adiciona a chave correspondente em notifState.
- */
-function NotificationsSection({
-  notifState,
-  onNotifChange,
-  onSave,
-  saving,
-}: {
-  notifState: {
-    emailContribuicoes: boolean;
-    emailMetaAtingida: boolean;
-    emailTransferencias: boolean;
-    emailMarketing: boolean;
-    pushContribuicoes: boolean;
-    pushMetaAtingida: boolean;
-    pushTransferencias: boolean;
-    inAppTudo: boolean;
-    inAppSons: boolean;
-  };
-  onNotifChange: (next: {
-    emailContribuicoes: boolean;
-    emailMetaAtingida: boolean;
-    emailTransferencias: boolean;
-    emailMarketing: boolean;
-    pushContribuicoes: boolean;
-    pushMetaAtingida: boolean;
-    pushTransferencias: boolean;
-    inAppTudo: boolean;
-    inAppSons: boolean;
-  }) => void;
-  onSave: () => void;
-  saving: boolean;
-}) {
-  const { t } = useI18n();
-  const config = t.configuration;
-
-  const toggle = (key: keyof typeof notifState) =>
-    onNotifChange({ ...notifState, [key]: !notifState[key] });
-
-  return (
-    <div>
-      <SettingsCard title={config.notificacoes.card1.titulo}>
-        <SettingRow label={config.notificacoes.card1.nova_contribuicao} description={config.notificacoes.card1.descricao}>
-          <Toggle enabled={notifState.emailContribuicoes} onChange={() => toggle("emailContribuicoes")} />
-        </SettingRow>
-        <SettingRow label={config.notificacoes.card1.meta_atingida} description={config.notificacoes.card1.descricao_meta}>
-          <Toggle enabled={notifState.emailMetaAtingida} onChange={() => toggle("emailMetaAtingida")} />
-        </SettingRow>
-        <SettingRow label={config.notificacoes.card1.transferencia_recebida} description={config.notificacoes.card1.descricao_transferencia}>
-          <Toggle enabled={notifState.emailTransferencias} onChange={() => toggle("emailTransferencias")} />
-        </SettingRow>
-        <SettingRow label={config.notificacoes.card1.marketing} description={config.notificacoes.card1.descricao_marketing}>
-          <Toggle enabled={notifState.emailMarketing} onChange={() => toggle("emailMarketing")} />
-        </SettingRow>
-      </SettingsCard>
-
-      <SettingsCard title={config.notificacoes.card2.titulo}>
-        <SettingRow label={config.notificacoes.card2.nova_contribuicao}>
-          <Toggle enabled={notifState.pushContribuicoes} onChange={() => toggle("pushContribuicoes")} />
-        </SettingRow>
-        <SettingRow label={config.notificacoes.card2.meta_atingida}>
-          <Toggle enabled={notifState.pushMetaAtingida} onChange={() => toggle("pushMetaAtingida")} />
-        </SettingRow>
-        <SettingRow label={config.notificacoes.card2.transferencia_recebida}>
-          <Toggle enabled={notifState.pushTransferencias} onChange={() => toggle("pushTransferencias")} />
-        </SettingRow>
-      </SettingsCard>
-
-      <SettingsCard title={config.notificacoes.card3.titulo}>
-        <SettingRow label={config.notificacoes.card3.mostrar}>
-          <Toggle enabled={notifState.inAppTudo} onChange={() => toggle("inAppTudo")} />
-        </SettingRow>
-        <SettingRow label={config.notificacoes.card3.sons}>
-          <Toggle enabled={notifState.inAppSons} onChange={() => toggle("inAppSons")} />
-        </SettingRow>
-        <div className="py-3 flex justify-end">
-          <button
-            onClick={onSave}
-            disabled={saving}
-            className="px-5 py-2 rounded-xl text-sm font-semibold bg-vaks-light-purple-button dark:bg-vaks-dark-purple-button text-white hover:opacity-90 disabled:opacity-60 transition-opacity"
-          >
-            {config.conta.card1.guardar}
-          </button>
-        </div>
       </SettingsCard>
     </div>
   );
@@ -425,16 +360,12 @@ function PrivacySection({
     mostrarVaquinhas: boolean;
     mostrarContribuicoes: boolean;
     mostrarCarteira: boolean;
-    duasFatores: boolean;
-    sessaoAtiva: boolean;
   };
   onPrivacyChange: (next: {
     perfilPublico: boolean;
     mostrarVaquinhas: boolean;
     mostrarContribuicoes: boolean;
     mostrarCarteira: boolean;
-    duasFatores: boolean;
-    sessaoAtiva: boolean;
   }) => void;
   onSave: () => void;
   saving: boolean;
@@ -460,35 +391,16 @@ function PrivacySection({
         <SettingRow label={config.privacidade.card1.mostrar_saldo} description={config.privacidade.card1.descricao_saldo}>
           <Toggle enabled={privacyState.mostrarCarteira} onChange={() => toggle("mostrarCarteira")} />
         </SettingRow>
-      </SettingsCard>
 
-      <SettingsCard title={config.privacidade.card2.titulo}>
-        <SettingRow label={config.privacidade.card2.auth} description={config.privacidade.card2.descricao_auth}>
-          <Toggle enabled={privacyState.duasFatores} onChange={() => toggle("duasFatores")} />
-        </SettingRow>
-        <SettingRow label={config.privacidade.card2.sessao} description={config.privacidade.card2.descricao_sessao}>
-          <Toggle enabled={privacyState.sessaoAtiva} onChange={() => toggle("sessaoAtiva")} />
-        </SettingRow>
-        <SettingRow label={config.privacidade.card2.sessoes_ativas} description={config.privacidade.card2.descricao_sessoes_ativas}>
-          <button className="flex items-center gap-1 text-sm text-vaks-light-purple-button dark:text-vaks-dark-secondary font-medium hover:underline">
-            {config.privacidade.card2.ver_sessoes} <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </SettingRow>
-      </SettingsCard>
-
-      <SettingsCard title={config.privacidade.card3.titulo}>
-        <SettingRow label={config.privacidade.card3.exportar} description={config.privacidade.card3.descricao}>
+        <div className="py-3 flex justify-end">
           <button
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-2 rounded-xl text-sm font-medium border disabled:opacity-60
-            border-vaks-light-stroke dark:border-vaks-dark-stroke
-            text-vaks-light-main-txt dark:text-vaks-dark-main-txt
-            hover:bg-vaks-light-input dark:hover:bg-vaks-dark-input transition-colors"
+            className="px-5 py-2 rounded-xl text-sm font-semibold bg-vaks-light-purple-button dark:bg-vaks-dark-purple-button text-white hover:opacity-90 disabled:opacity-60 transition-opacity"
           >
-            {config.privacidade.card3.guardar}
+            {saving ? t.common.loading : t.common.save}
           </button>
-        </SettingRow>
+        </div>
       </SettingsCard>
     </div>
   );
@@ -611,8 +523,8 @@ function SettingsTabs({ active, setActive }: { active: SettingsSection; setActiv
                   animate={{ opacity: [0.4, 0.7, 0.4] }}
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <div className="absolute inset-[-4px] bg-vaks-light-purple-button/30 dark:bg-vaks-dark-purple-button/30 rounded-full blur-md" />
-                  <div className="absolute inset-[-8px] bg-vaks-light-purple-button/20 dark:bg-vaks-dark-purple-button/20 rounded-full blur-xl" />
+                  <div className="absolute -inset-1 bg-vaks-light-purple-button/30 dark:bg-vaks-dark-purple-button/30 rounded-full blur-md" />
+                  <div className="absolute -inset-2 bg-vaks-light-purple-button/20 dark:bg-vaks-dark-purple-button/20 rounded-full blur-xl" />
                 </motion.div>
               </motion.div>
             )}
@@ -662,7 +574,8 @@ function SettingsTabs({ active, setActive }: { active: SettingsSection; setActiv
 // ─── PÁGINA PRINCIPAL ───
 export default function SettingsPage() {
   const { t } = useI18n();
-  const { user, setUser } = useAuth();
+  const router = useRouter();
+  const { user, setUser, setPrivacySettings, logout } = useAuth();
   const config = t.configuration;
   const [active, setActive] = useState<SettingsSection>("account");
   const [mascotSize, setMascotSize] = useState({ width: 150, height: 180 });
@@ -672,24 +585,13 @@ export default function SettingsPage() {
     mostrarVaquinhas: true,
     mostrarContribuicoes: true,
     mostrarCarteira: false,
-    duasFatores: false,
-    sessaoAtiva: true,
-  });
-  const [notifState, setNotifState] = useState({
-    emailContribuicoes: true,
-    emailMetaAtingida: true,
-    emailTransferencias: false,
-    emailMarketing: false,
-    pushContribuicoes: true,
-    pushMetaAtingida: true,
-    pushTransferencias: true,
-    inAppTudo: true,
-    inAppSons: false,
   });
   const [settingsData, setSettingsData] = useState<Required<SettingsApiData>>(DEFAULT_SETTINGS);
   const [savingAccount, setSavingAccount] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
-  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Atualiza tamanho do mascote conforme o tamanho da janela
   useEffect(() => {
@@ -750,19 +652,15 @@ export default function SettingsPage() {
         setPrivacyState((prev) => ({
           ...prev,
           perfilPublico: !!mergedSettings.privacy.profilePublic,
+          mostrarVaquinhas: mergedSettings.privacy.showCampaigns ?? prev.mostrarVaquinhas,
           mostrarContribuicoes: !!mergedSettings.privacy.showContributions,
           mostrarCarteira: !!mergedSettings.privacy.showBalance,
         }));
-        setNotifState({
-          emailContribuicoes: mergedSettings.notifications.emailContribuicoes ?? mergedSettings.notifications.contributions ?? true,
-          emailMetaAtingida: mergedSettings.notifications.emailMetaAtingida ?? mergedSettings.notifications.goalReached ?? true,
-          emailTransferencias: mergedSettings.notifications.emailTransferencias ?? mergedSettings.notifications.newMembers ?? false,
-          emailMarketing: mergedSettings.notifications.emailMarketing ?? mergedSettings.notifications.email ?? false,
-          pushContribuicoes: mergedSettings.notifications.pushContribuicoes ?? true,
-          pushMetaAtingida: mergedSettings.notifications.pushMetaAtingida ?? true,
-          pushTransferencias: mergedSettings.notifications.pushTransferencias ?? true,
-          inAppTudo: mergedSettings.notifications.inAppTudo ?? true,
-          inAppSons: mergedSettings.notifications.inAppSons ?? false,
+        setPrivacySettings({
+          profilePublic: !!mergedSettings.privacy.profilePublic,
+          showBalance: !!mergedSettings.privacy.showBalance,
+          showContributions: !!mergedSettings.privacy.showContributions,
+          showCampaigns: mergedSettings.privacy.showCampaigns ?? true,
         });
       } catch {
         if (cancelled) return;
@@ -809,63 +707,99 @@ export default function SettingsPage() {
     }
   };
 
+  const handleChangePassword = async ({ currentPassword, newPassword, confirmPassword }: { currentPassword: string; newPassword: string; confirmPassword: string }) => {
+    if (!user?.id) return false;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Preencha todos os campos da palavra-passe");
+      return false;
+    }
+
+    if (newPassword.length < 8) {
+      toast.error("A nova palavra-passe deve ter pelo menos 8 caracteres");
+      return false;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("As palavras-passe não correspondem");
+      return false;
+    }
+
+    setSavingPassword(true);
+    try {
+      await api.post(`/auth/change-password`, {
+        currentPassword,
+        newPassword,
+      });
+      toast.success(config.conta.card2.sucesso);
+      return true;
+    } catch (error) {
+      const apiError = error as { status?: number; message?: string | string[] };
+
+      if (apiError?.status === 401) {
+        toast.error(config.conta.card2.erro_atual);
+        return false;
+      }
+
+      if (apiError?.status === 400) {
+        toast.error(config.conta.card2.erro_requisitos);
+        return false;
+      }
+
+      toast.error(config.conta.card2.erro);
+      return false;
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user?.id) return;
+
+    setDeletingAccount(true);
+    try {
+      await api.delete(`/users/${user.id}`);
+      toast.success(config.conta.card3.delete_sucesso);
+      logout();
+      router.push("/auth/login");
+    } catch {
+      toast.error(config.conta.card3.delete_erro);
+    } finally {
+      setDeletingAccount(false);
+      setIsDeleteModalOpen(false);
+    }
+  };
+
   const handleSavePrivacy = async () => {
     if (!user?.id) return;
 
-    const nextSettings: Required<SettingsApiData> = {
-      ...settingsData,
-      privacy: {
-        ...settingsData.privacy,
-        profilePublic: privacyState.perfilPublico,
-        showContributions: privacyState.mostrarContribuicoes,
-        showBalance: privacyState.mostrarCarteira,
-      },
+    const nextPrivacy = {
+      profilePublic: privacyState.perfilPublico,
+      showCampaigns: privacyState.mostrarVaquinhas,
+      showContributions: privacyState.mostrarContribuicoes,
+      showBalance: privacyState.mostrarCarteira,
     };
 
     setSavingPrivacy(true);
     try {
-      await api.put(`/users/${user.id}/settings`, nextSettings);
-      setSettingsData(nextSettings);
+      await api.put(`/users/${user.id}/settings`, {
+        privacy: nextPrivacy,
+      });
+      setSettingsData((prev) => ({
+        ...prev,
+        privacy: nextPrivacy,
+      }));
+      setPrivacySettings({
+        profilePublic: privacyState.perfilPublico,
+        showBalance: privacyState.mostrarCarteira,
+        showContributions: privacyState.mostrarContribuicoes,
+        showCampaigns: privacyState.mostrarVaquinhas,
+      });
       toast.success("Privacidade atualizada com sucesso");
     } catch {
       toast.error("Nao foi possivel guardar as definicoes de privacidade");
     } finally {
       setSavingPrivacy(false);
-    }
-  };
-
-  const handleSaveNotifications = async () => {
-    if (!user?.id) return;
-
-    const nextSettings: Required<SettingsApiData> = {
-      ...settingsData,
-      notifications: {
-        ...settingsData.notifications,
-        emailContribuicoes: notifState.emailContribuicoes,
-        emailMetaAtingida: notifState.emailMetaAtingida,
-        emailTransferencias: notifState.emailTransferencias,
-        emailMarketing: notifState.emailMarketing,
-        pushContribuicoes: notifState.pushContribuicoes,
-        pushMetaAtingida: notifState.pushMetaAtingida,
-        pushTransferencias: notifState.pushTransferencias,
-        inAppTudo: notifState.inAppTudo,
-        inAppSons: notifState.inAppSons,
-        contributions: notifState.emailContribuicoes,
-        goalReached: notifState.emailMetaAtingida,
-        newMembers: notifState.emailTransferencias,
-        email: notifState.emailMarketing,
-      },
-    };
-
-    setSavingNotifications(true);
-    try {
-      await api.put(`/users/${user.id}/settings`, nextSettings);
-      setSettingsData(nextSettings);
-      toast.success("Notificacoes atualizadas com sucesso");
-    } catch {
-      toast.error("Nao foi possivel guardar as definicoes de notificacoes");
-    } finally {
-      setSavingNotifications(false);
     }
   };
 
@@ -876,14 +810,9 @@ export default function SettingsPage() {
         onAccountChange={setAccount}
         onSave={handleSaveAccount}
         saving={savingAccount}
-      />
-    ),
-    notifications: (
-      <NotificationsSection
-        notifState={notifState}
-        onNotifChange={setNotifState}
-        onSave={handleSaveNotifications}
-        saving={savingNotifications}
+        onChangePassword={handleChangePassword}
+        passwordSaving={savingPassword}
+          onDeleteAccount={() => setIsDeleteModalOpen(true)}
       />
     ),
     privacy: (
@@ -943,6 +872,76 @@ export default function SettingsPage() {
           />
         </div>
       </div>
+
+      <AnimatePresence>
+        {isDeleteModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+            onClick={() => !deletingAccount && setIsDeleteModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: 10, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.96, y: 10, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-md rounded-3xl border border-vaks-light-stroke/40 dark:border-vaks-dark-stroke/30 bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card shadow-2xl p-6"
+            >
+              <div className="flex items-start gap-4">
+                <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">
+                        {config.conta.card3.modal_titulo}
+                      </h3>
+                      <p className="mt-1 text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">
+                        {config.conta.card3.modal_descricao}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsDeleteModalOpen(false)}
+                      disabled={deletingAccount}
+                      className="rounded-full p-2 text-vaks-light-alt-txt transition-colors hover:bg-vaks-light-input hover:text-vaks-light-main-txt dark:text-vaks-dark-alt-txt dark:hover:bg-vaks-dark-input dark:hover:text-vaks-dark-main-txt disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-6 flex items-center justify-end gap-3">
+                    <button
+                      onClick={() => setIsDeleteModalOpen(false)}
+                      disabled={deletingAccount}
+                      className="rounded-xl border border-vaks-light-stroke dark:border-vaks-dark-stroke px-4 py-2 text-sm font-semibold text-vaks-light-main-txt transition-colors hover:bg-vaks-light-input dark:text-vaks-dark-main-txt dark:hover:bg-vaks-dark-input disabled:opacity-50"
+                    >
+                      {config.conta.card3.modal_cancelar}
+                    </button>
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deletingAccount}
+                      className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {deletingAccount ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {config.conta.card3.modal_carregando}
+                        </>
+                      ) : (
+                        config.conta.card3.modal_confirmar
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

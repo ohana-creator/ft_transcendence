@@ -104,13 +104,34 @@ export class WalletService
         return ({ balance: wallet.balance.toString(), currency: 'VAKS' });
     }
 
-    async transfer(fromUser: { userId: string; username?: string }, dto: TransferDto)
+    async transfer(fromUser: { userId: string; username?: string }, dto: TransferDto | Record<string, unknown>)
     {
         const fromUserId = fromUser.userId;
-        const { toUserId, amount, note } = dto;
+        const payload = dto as Record<string, unknown>;
+        const rawAmount = payload.amount;
+        const amount = typeof rawAmount === 'number' ? rawAmount : Number(rawAmount);
+        const note = typeof payload.note === 'string' ? payload.note : undefined;
+        const recipientIdentifier = this.extractRecipientIdentifier(payload);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new BadRequestException('INVALID_AMOUNT');
+        }
+
+        if (!recipientIdentifier) {
+            throw new BadRequestException('RECIPIENT_REQUIRED');
+        }
+
+        // Resolver identifier (UUID, email ou username) em userId
+        const toUserId = await this.resolveUserIdentifier(recipientIdentifier);
 
         if (fromUserId === toUserId) {
-            throw new BadRequestException('CANNOT_TRANSFER_TO_SELF');
+            const current = await this.getBalance(fromUserId);
+            return {
+                transaction: null,
+                newBalance: Number(current.balance),
+                ignored: true,
+                reason: 'CANNOT_TRANSFER_TO_SELF',
+            };
         }
 
         await this.ensureWallet(fromUserId);
@@ -222,6 +243,18 @@ export class WalletService
 
     async topup(userId: string, dto: TopupDto)
     {
+        const maxTopupAmount = 1_000_000;
+
+        if (dto.amount > maxTopupAmount) {
+            return {
+                status: 'REJECTED',
+                code: 'TOPUP_AMOUNT_EXCEEDED',
+                message: `Valor maximo permitido: ${maxTopupAmount}`,
+                maxAmount: maxTopupAmount,
+                requestedAmount: dto.amount,
+            };
+        }
+
         const mode = dto.mode ?? 'checkout';
         const provider = dto.provider ?? 'mock';
 
@@ -237,7 +270,7 @@ export class WalletService
 
         const reference = randomUUID();
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        const frontendUrl = (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001').replace(/\/$/, '');
+        const frontendUrl = (this.config.get<string>('FRONTEND_URL') ?? 'https://localhost:3001').replace(/\/$/, '');
         const configuredCheckoutPath = this.config.get<string>('TOPUP_CHECKOUT_PATH') ?? '/carteira/carregar';
         const checkoutPath = configuredCheckoutPath.startsWith('/')
             ? configuredCheckoutPath
@@ -795,6 +828,81 @@ export class WalletService
                 ? transaction.metadata
                 : {},
         };
+    }
+
+    private async resolveUserIdentifier(identifier: string): Promise<string>
+    {
+        // Se já é UUID válido, retorna direto
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(identifier)) {
+            return identifier;
+        }
+
+        // Tenta resolver via user-service search endpoint
+        if (this.userServiceUrl) {
+            try {
+                const response = await fetch(`${this.userServiceUrl}/users/search?q=${encodeURIComponent(identifier)}`, { method: 'GET' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        return data[0].id;
+                    }
+
+                    if (
+                        data &&
+                        typeof data === 'object' &&
+                        Array.isArray((data as { users?: Array<{ id: string }> }).users) &&
+                        (data as { users: Array<{ id: string }> }).users.length > 0
+                    ) {
+                        return (data as { users: Array<{ id: string }> }).users[0].id;
+                    }
+                }
+            } catch (error) {
+                this.logger.warn(`Failed to resolve identifier ${identifier}: ${error}`);
+            }
+        }
+
+        throw new NotFoundException(`USER_NOT_FOUND: ${identifier}`);
+    }
+
+    private extractRecipientIdentifier(payload: Record<string, unknown>): string
+    {
+        const preferred = [
+            payload.toUserId,
+            payload.recipient,
+            payload.recipientId,
+            payload.recipientEmail,
+            payload.to,
+            payload.toEmail,
+            payload.toUser,
+            payload.toUserEmail,
+            payload.email,
+            payload.identifier,
+            payload.destinatario,
+            payload.destinatarioEmail,
+            payload.user,
+            payload.target,
+            payload.destination,
+        ];
+
+        for (const value of preferred) {
+            if (typeof value === 'string' && value.trim()) {
+                return value.trim();
+            }
+        }
+
+        // Fallback defensivo: tenta qualquer campo string exceto campos conhecidos não-destinatário.
+        const ignored = new Set(['amount', 'note', 'description', 'memo', 'message', 'currency']);
+        for (const [key, value] of Object.entries(payload)) {
+            if (ignored.has(key)) {
+                continue;
+            }
+            if (typeof value === 'string' && value.trim()) {
+                return value.trim();
+            }
+        }
+
+        return '';
     }
 
     private async getUserProfile(userId: string): Promise<{ id: string; username?: string }>

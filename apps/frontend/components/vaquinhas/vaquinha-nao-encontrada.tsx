@@ -27,11 +27,7 @@ export function VaquinhaNaoEncontrada() {
             <svg width="180" height="200" viewBox="0 0 250 290" fill="none" xmlns="http://www.w3.org/2000/svg">
 
               {/* Shadow */}
-              <motion.ellipse
-                cx="122" cy="278" rx="66" ry="9" fill="#7144B7"
-                animate={{ scaleX: [1, 0.8, 1], opacity: [0.08, 0.04, 0.08] }}
-                transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
-              />
+              <ellipse cx="122" cy="278" rx="66" ry="9" fill="#7144B7" opacity="0.08" />
 
               {/* Tail — sad, drooping */}
               <path d="M196 168 Q210 175 206 188 Q202 200 212 208"
@@ -108,16 +104,14 @@ export function VaquinhaNaoEncontrada() {
               <path d="M104 156 Q118 148 132 156" stroke="#2a1040" strokeWidth="2.8" strokeLinecap="round" fill="none"/>
 
               {/* Tears */}
-              <motion.ellipse
-                cx="80" cy="106" rx="4" ry="5" fill="#A78BFA" opacity="0.7"
-                animate={{ cy: [106, 130, 106], opacity: [0.7, 0, 0.7] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeIn', delay: 0.5 }}
-              />
-              <motion.ellipse
-                cx="156" cy="106" rx="4" ry="5" fill="#A78BFA" opacity="0.7"
-                animate={{ cy: [106, 130, 106], opacity: [0.7, 0, 0.7] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeIn', delay: 1.2 }}
-              />
+              <ellipse cx="80" cy="106" rx="4" ry="5" fill="#A78BFA" opacity="0.7">
+                <animate attributeName="cy" values="106;130;106" dur="2.4s" repeatCount="indefinite" begin="0.5s" />
+                <animate attributeName="opacity" values="0.7;0;0.7" dur="2.4s" repeatCount="indefinite" begin="0.5s" />
+              </ellipse>
+              <ellipse cx="156" cy="106" rx="4" ry="5" fill="#A78BFA" opacity="0.7">
+                <animate attributeName="cy" values="106;130;106" dur="2.4s" repeatCount="indefinite" begin="1.2s" />
+                <animate attributeName="opacity" values="0.7;0;0.7" dur="2.4s" repeatCount="indefinite" begin="1.2s" />
+              </ellipse>
             </svg>
           </motion.div>
         </motion.div>

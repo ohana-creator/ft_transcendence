@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { useI18n } from '@/locales';
 
 const ALLOWED_PROVIDERS = new Set(['google', '42', 'facebook']);
 
@@ -10,6 +11,8 @@ export default function OAuthProviderCallbackBridgePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const params = useParams<{ provider: string }>();
+  const { t } = useI18n();
+  const oauth = t.login.oauth_callback;
 
   const provider = useMemo(() => String(params?.provider || '').toLowerCase(), [params?.provider]);
 
@@ -31,10 +34,10 @@ export default function OAuthProviderCallbackBridgePage() {
       <div className="w-full max-w-md rounded-2xl bg-vaks-light-purple-card dark:bg-vaks-dark-purple-card p-8 text-center shadow-xl">
         <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-vaks-light-purple-button dark:text-vaks-dark-purple-button" />
         <h1 className="mb-2 text-xl font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">
-          A concluir autenticação social...
+          {oauth.authenticating_title}
         </h1>
         <p className="text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">
-          Aguarda enquanto finalizamos o teu login.
+          {oauth.authenticating_description}
         </p>
       </div>
     </div>

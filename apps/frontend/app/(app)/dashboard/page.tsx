@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Eye, EyeOff, CreditCard, Send, ArrowDownToLine, ArrowRightLeft,
@@ -13,6 +13,8 @@ import CosmicNebulaMastercard from "@/components/carteira/cursor-wander-card";
 import  OperacoesFrequentes from "@/components/dashboard/operacoes-frequentes";
 import { useAuth } from "@/contexts/auth";
 import { api } from "@/utils/api/api";
+import { transferirVaks } from "@/utils/wallet";
+import { toast } from "@/utils/toast";
 import { useAllVaquinhas } from "@/hooks/vaquinhas/useVaquinhas";
 
 type DashboardTxType = "contribuicao" | "recebimento" | "transferencia";
@@ -38,7 +40,7 @@ interface WalletTxApi {
   amount: string | number;
   type: "P2P_TRANSFER" | "CAMPAIGN_CONTRIBUTION" | "CAMPAIGN_WITHDRAWAL" | "DEPOSIT";
   status: "PENDING" | "COMPLETED" | "FAILED" | "REVERSED";
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -102,6 +104,7 @@ export default function DashboardPage() {
   const [saldoPendente, setSaldoPendente] = useState(0);
   const [transacoes, setTransacoes] = useState<DashboardTransaction[]>([]);
   const [walletLoading, setWalletLoading] = useState(true);
+  const [transferLoading, setTransferLoading] = useState(false);
 
   const { vaquinhas, loading: vaquinhasLoading } = useAllVaquinhas();
 
@@ -184,90 +187,137 @@ export default function DashboardPage() {
     return `${date.getDate()} ${month}, ${hh}:${mm}`;
   };
 
-  useEffect(() => {
-    const toNumber = (value: string | number | undefined | null): number => {
-      if (typeof value === "number") return value;
-      if (typeof value === "string") return parseFloat(value) || 0;
-      return 0;
-    };
+  const toNumber = (value: string | number | undefined | null): number => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string") return parseFloat(value) || 0;
+    return 0;
+  };
 
-    const fetchWalletData = async () => {
-      setWalletLoading(true);
-      try {
-        const wallet = await api.get<WalletResponse>("/wallet");
-        const walletId = wallet.id;
-        setSaldo(toNumber(wallet.balance));
+  const pickText = (...values: unknown[]): string | undefined => {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value;
+      }
+    }
+    return undefined;
+  };
 
-        const txResponse = await api.get<WalletTransactionsResponse>("/wallet/transactions", {
-          params: { page: 1, limit: 10 },
-        });
+  const fetchWalletData = useCallback(async () => {
+    setWalletLoading(true);
+    try {
+      const wallet = await api.get<WalletResponse>("/wallet");
+      const walletId = wallet.id;
+      setSaldo(toNumber(wallet.balance));
 
-        const mapped = (txResponse.data || []).map((tx): DashboardTransaction => {
-          const amount = toNumber(tx.amount);
+      const txResponse = await api.get<WalletTransactionsResponse>("/wallet/transactions", {
+        params: { page: 1, limit: 10 },
+      });
 
-          if (tx.type === "CAMPAIGN_CONTRIBUTION") {
-            return {
-              id: tx.id,
-              tipo: "contribuicao",
-              nome: tx.metadata?.campaignTitle || tx.metadata?.campaignName || "Contribuição em campanha",
-              valor: -Math.abs(amount),
-              data: formatTxDate(tx.createdAt),
-              status: tx.status,
-            };
-          }
+      const mapped = (txResponse.data || []).map((tx): DashboardTransaction => {
+        const amount = toNumber(tx.amount);
 
-          if (tx.type === "P2P_TRANSFER") {
-            const sentByMe = tx.fromWalletId === walletId;
-            return {
-              id: tx.id,
-              tipo: sentByMe ? "transferencia" : "recebimento",
-              nome: sentByMe
-                ? (tx.metadata?.toUsername || tx.metadata?.note || "Transferência enviada")
-                : (tx.metadata?.fromUsername || tx.metadata?.note || "Transferência recebida"),
-              valor: sentByMe ? -Math.abs(amount) : Math.abs(amount),
-              data: formatTxDate(tx.createdAt),
-              status: tx.status,
-            };
-          }
-
-          if (tx.type === "DEPOSIT" || tx.type === "CAMPAIGN_WITHDRAWAL") {
-            return {
-              id: tx.id,
-              tipo: "recebimento",
-              nome: tx.metadata?.note || (tx.type === "DEPOSIT" ? "Depósito" : "Levantamento de campanha"),
-              valor: Math.abs(amount),
-              data: formatTxDate(tx.createdAt),
-              status: tx.status,
-            };
-          }
-
+        if (tx.type === "CAMPAIGN_CONTRIBUTION") {
           return {
             id: tx.id,
-            tipo: "transferencia",
-            nome: "Transação",
-            valor: amount,
+            tipo: "contribuicao",
+            nome: pickText(tx.metadata?.campaignTitle, tx.metadata?.campaignName) || "Contribuição em campanha",
+            valor: -Math.abs(amount),
             data: formatTxDate(tx.createdAt),
             status: tx.status,
           };
-        });
+        }
 
-        const pendente = mapped
-          .filter((tx) => tx.status === "PENDING" && tx.valor < 0)
-          .reduce((acc, tx) => acc + Math.abs(tx.valor), 0);
+        if (tx.type === "P2P_TRANSFER") {
+          const sentByMe = tx.fromWalletId === walletId;
+          return {
+            id: tx.id,
+            tipo: sentByMe ? "transferencia" : "recebimento",
+            nome: sentByMe
+              ? (pickText(tx.metadata?.toUsername, tx.metadata?.note) || "Transferência enviada")
+              : (pickText(tx.metadata?.fromUsername, tx.metadata?.note) || "Transferência recebida"),
+            valor: sentByMe ? -Math.abs(amount) : Math.abs(amount),
+            data: formatTxDate(tx.createdAt),
+            status: tx.status,
+          };
+        }
 
-        setSaldoPendente(pendente);
-        setTransacoes(mapped.slice(0, 4));
-      } catch {
-        setSaldo(0);
-        setSaldoPendente(0);
-        setTransacoes([]);
-      } finally {
-        setWalletLoading(false);
-      }
-    };
+        if (tx.type === "DEPOSIT" || tx.type === "CAMPAIGN_WITHDRAWAL") {
+          return {
+            id: tx.id,
+            tipo: "recebimento",
+            nome: pickText(tx.metadata?.note) || (tx.type === "DEPOSIT" ? "Depósito" : "Levantamento de campanha"),
+            valor: Math.abs(amount),
+            data: formatTxDate(tx.createdAt),
+            status: tx.status,
+          };
+        }
 
-    fetchWalletData();
+        return {
+          id: tx.id,
+          tipo: "transferencia",
+          nome: "Transação",
+          valor: amount,
+          data: formatTxDate(tx.createdAt),
+          status: tx.status,
+        };
+      });
+
+      const pendente = mapped
+        .filter((tx) => tx.status === "PENDING" && tx.valor < 0)
+        .reduce((acc, tx) => acc + Math.abs(tx.valor), 0);
+
+      setSaldoPendente(pendente);
+      setTransacoes(mapped.slice(0, 4));
+    } catch {
+      setSaldo(0);
+      setSaldoPendente(0);
+      setTransacoes([]);
+    } finally {
+      setWalletLoading(false);
+    }
   }, []);
+
+  const handleQuickTransfer = async () => {
+    const recipient = destinatario.trim();
+    const amount = parseFloat(montante);
+
+    if (!recipient) {
+      toast.error("Beneficiário obrigatório", "Informa um email ou UUID válido.");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Montante inválido", "Informa um valor maior que 0.");
+      return;
+    }
+
+    setTransferLoading(true);
+
+    try {
+      await transferirVaks({ recipient, amount });
+      toast.success("Transferência realizada com sucesso!");
+      setDestinatario("");
+      setMontante("");
+      await fetchWalletData();
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "message" in error
+          ? Array.isArray((error as { message: unknown }).message)
+            ? (error as { message: string[] }).message.join(" | ")
+            : String((error as { message: unknown }).message)
+          : "Não foi possível concluir a transferência.";
+
+      toast.error("Erro na transferência", message);
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWalletData();
+  }, [fetchWalletData]);
 
   const vaquinhasRecentes = useMemo(() => {
     return vaquinhas.slice(0, 3).map((vaq) => {
@@ -427,6 +477,8 @@ export default function DashboardPage() {
                       value={montante}
                       onChange={(e) => setMontante(e.target.value)}
                       placeholder="0.00"
+                      min="0.01"
+                      step="0.01"
                       className="w-full rounded-xl bg-vaks-light-input dark:bg-vaks-dark-input px-4 py-3 pr-16 text-sm text-vaks-light-main-txt dark:text-vaks-dark-main-txt placeholder:text-vaks-light-alt-txt/50 dark:placeholder:text-vaks-dark-alt-txt/50 outline-none focus:ring-2 focus:ring-vaks-cobalt/30 dark:focus:ring-vaks-dark-secondary/30 transition-shadow"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">
@@ -437,9 +489,13 @@ export default function DashboardPage() {
               </div>
 
               {/* Submit */}
-              <button className="mt-5 w-full flex items-center justify-center gap-2 rounded-xl bg-vaks-light-purple-button dark:bg-vaks-dark-purple-button px-4 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity">
+              <button
+                onClick={handleQuickTransfer}
+                disabled={transferLoading || !destinatario.trim() || !montante.trim()}
+                className="mt-5 w-full flex items-center justify-center gap-2 rounded-xl bg-vaks-light-purple-button dark:bg-vaks-dark-purple-button px-4 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Send className="h-4 w-4" />
-                {d.validar_transferencia}
+                {transferLoading ? t.buttons.sending : d.validar_transferencia}
               </button>
             </div>
           </motion.div>
@@ -634,7 +690,7 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-vaks-light-stroke/10 dark:divide-vaks-dark-stroke/10">
             {vaquinhasRecentes.map((vaq, i) => (
-              <Link key={vaq.id} href={`/vaquinhas/${vaq.id}`} className="block">
+              <Link key={vaq.id} href={vaq.tipo === 'privada' ? `/vaquinhas/privadas/${vaq.id}` : `/vaquinhas/${vaq.id}`} className="block">
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
