@@ -84,7 +84,15 @@ export function usePendingInvitations(): UsePendingInvitationsReturn {
   const acceptInvitation = useCallback(async (inviteId: string) => {
     try {
       const acceptedInvite = invitations.find((inv) => inv.id === inviteId);
-      await acceptInvite(inviteId);
+      const result = await acceptInvite(inviteId);
+      
+      // Se o convite já foi respondido anteriormente, tratar como sucesso silencioso
+      if (result?.alreadyResponded) {
+        // Apenas remover da lista sem mostrar erro
+        setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
+        return;
+      }
+      
       toast.success('Convite aceite!', 'Agora és membro desta campanha.');
 
       if (typeof window !== 'undefined') {
@@ -101,6 +109,11 @@ export function usePendingInvitations(): UsePendingInvitationsReturn {
       // Remover da lista local
       setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
     } catch (err: any) {
+      // Se o erro for "already responded", tratar silenciosamente
+      if (err?.message?.toLowerCase()?.includes('already responded') || err?.message?.toLowerCase()?.includes('already')) {
+        setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
+        return;
+      }
       toast.error('Erro ao aceitar convite', err?.message || 'Tenta novamente');
       throw err;
     }
@@ -108,12 +121,24 @@ export function usePendingInvitations(): UsePendingInvitationsReturn {
 
   const rejectInvitation = useCallback(async (inviteId: string) => {
     try {
-      await rejectInvite(inviteId);
+      const result = await rejectInvite(inviteId);
+      
+      // Se o convite já foi respondido anteriormente, tratar como sucesso silencioso
+      if (result?.alreadyResponded) {
+        setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
+        return;
+      }
+      
       toast.info('Convite rejeitado');
       
       // Remover da lista local
       setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
     } catch (err: any) {
+      // Se o erro for "already responded", tratar silenciosamente
+      if (err?.message?.toLowerCase()?.includes('already responded') || err?.message?.toLowerCase()?.includes('already')) {
+        setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
+        return;
+      }
       toast.error('Erro ao rejeitar convite', err?.message || 'Tenta novamente');
       throw err;
     }

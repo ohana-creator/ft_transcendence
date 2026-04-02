@@ -317,12 +317,30 @@ export class UsersService {
       throw new UnprocessableEntityException('There is an active block between users');
     }
 
+    // Se já são amigos, retornar sucesso silenciosamente
     if (existingFriendship) {
-      throw new ConflictException('Friendship already exists');
+      return {
+        success: true,
+        alreadyFriends: true,
+        data: {
+          friendshipId: existingFriendship.id,
+          message: 'Already friends',
+        },
+      };
     }
 
+    // Se já existe um pedido pendente, retornar o pedido existente
     if (existingPending) {
-      throw new ConflictException('Friend request already pending for this user pair');
+      return {
+        success: true,
+        alreadyPending: true,
+        data: {
+          id: existingPending.id,
+          status: existingPending.status,
+          createdAt: existingPending.createdAt.toISOString(),
+          message: 'Friend request already pending',
+        },
+      };
     }
 
     const request = await this.prisma.friendRequest.create({
@@ -348,8 +366,38 @@ export class UsersService {
     if (request.toUserId !== userId) {
       throw new ForbiddenException('Only the receiver can accept this request');
     }
+    
+    // Se já foi aceite, retornar sucesso silenciosamente
+    if (request.status === 'ACCEPTED') {
+      const [userAId, userBId] = this.orderPair(request.fromUserId, request.toUserId);
+      const existingFriendship = await this.prisma.friendship.findUnique({ 
+        where: { userAId_userBId: { userAId, userBId } } 
+      });
+      return {
+        success: true,
+        alreadyAccepted: true,
+        data: {
+          requestId: request.id,
+          status: request.status,
+          friendship: existingFriendship ? {
+            id: existingFriendship.id,
+            createdAt: existingFriendship.createdAt.toISOString(),
+          } : null,
+        },
+      };
+    }
+    
+    // Se foi recusado ou cancelado, retornar o status atual
     if (request.status !== 'PENDING') {
-      throw new ConflictException('Friend request is not pending');
+      return {
+        success: true,
+        alreadyResponded: true,
+        data: {
+          requestId: request.id,
+          status: request.status,
+          message: 'Friend request was already responded',
+        },
+      };
     }
 
     const [userAId, userBId] = this.orderPair(request.fromUserId, request.toUserId);
@@ -389,8 +437,18 @@ export class UsersService {
     if (request.toUserId !== userId) {
       throw new ForbiddenException('Only the receiver can decline this request');
     }
+    
+    // Se já foi respondido, retornar sucesso silenciosamente
     if (request.status !== 'PENDING') {
-      throw new ConflictException('Friend request is not pending');
+      return {
+        success: true,
+        alreadyResponded: true,
+        data: {
+          requestId: request.id,
+          status: request.status,
+          message: 'Friend request was already responded',
+        },
+      };
     }
 
     const updated = await this.prisma.friendRequest.update({
@@ -413,14 +471,22 @@ export class UsersService {
     if (request.fromUserId !== userId) {
       throw new ForbiddenException('Only sender can cancel this request');
     }
+    
+    // Se já não está pending, retornar silenciosamente
     if (request.status !== 'PENDING') {
-      throw new ConflictException('Friend request is not pending');
+      return {
+        success: true,
+        alreadyResponded: true,
+        message: 'Friend request was already responded',
+      };
     }
 
     await this.prisma.friendRequest.update({
       where: { id: requestId },
       data: { status: 'CANCELED', respondedAt: new Date() },
     });
+    
+    return { success: true };
   }
 
   async removeFriend(userId: string, targetUserId: string) {

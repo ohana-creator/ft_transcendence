@@ -535,7 +535,14 @@ export class CampaignsService {
     const isUserInvitation = invitation.invitedUserId === userId || invitation.invitedEmail === email;
     if (!isUserInvitation) throw new ForbiddenException('Not your invitation');
     
-    if (invitation.status !== 'PENDING') throw new BadRequestException('Invitation already responded');
+    // If already responded, return the current state silently instead of throwing error
+    if (invitation.status !== 'PENDING') {
+      return {
+        ...invitation,
+        alreadyResponded: true,
+        message: 'Invitation was already responded',
+      };
+    }
 
     if (accept) {
       const campaign = await this.prisma.campaign.findUnique({ where: { id: invitation.campaignId } });
