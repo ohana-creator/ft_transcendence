@@ -377,18 +377,18 @@ function VaquinhaPublicaCard({
 
       </div>
 
-      <div className="p-5 space-y-4 flex-1 flex flex-col">
-        <div className="flex-1">
-          <h3 className="text-lg font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt group-hover:text-purple-700 transition-colors line-clamp-1">
+      <div className="p-5 space-y-4 flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt group-hover:text-purple-700 transition-colors truncate">
             {vaquinha.nome}
           </h3>
-          <p className="mt-1.5 text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt line-clamp-2 leading-relaxed min-h-[2.5rem]">{vaquinha.descricao}</p>
+          <p className="mt-1.5 text-sm text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt line-clamp-2 leading-relaxed min-h-[2.5rem] break-words">{vaquinha.descricao}</p>
         </div>
 
         <div className="space-y-2">
-          <div className="flex justify-between items-baseline">
-            <span className="text-sm font-extrabold text-purple-600">{vaquinha.arrecadado.toLocaleString()} VAKS</span>
-            <span className="text-xs text-gray-400">de {vaquinha.meta.toLocaleString()}</span>
+          <div className="flex justify-between items-baseline gap-2">
+            <span className="text-sm font-extrabold text-purple-600 truncate">{vaquinha.arrecadado.toLocaleString()} VAKS</span>
+            <span className="text-xs text-gray-400 whitespace-nowrap">de {vaquinha.meta.toLocaleString()}</span>
           </div>
           <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
             <div
@@ -399,11 +399,11 @@ function VaquinhaPublicaCard({
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-700 via-violet-600 to-violet-500 flex items-center justify-center text-[10px] font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-700 via-violet-600 to-violet-500 flex items-center justify-center text-[10px] font-bold text-vaks-light-main-txt dark:text-vaks-dark-main-txt shrink-0">
               {vaquinha.criador.charAt(0).toUpperCase()}
             </div>
-            <span className="text-xs text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt">{vaquinha.criador}</span>
+            <span className="text-xs text-vaks-light-alt-txt dark:text-vaks-dark-alt-txt truncate">{vaquinha.criador}</span>
           </div>
           <AvatarStack contribuidores={vaquinha.contribuidores} max={3} />
         </div>
@@ -608,7 +608,7 @@ export default function VaquinhasLayoutPage() {
             viewMode === 'carousel' ? (
               <CardCarousel>
                 {restantes.map((v, i) => (
-                  <div key={v.id} className="flex-shrink-0 w-[280px] sm:w-[340px]">
+                  <div key={v.id} className="flex-shrink-0 w-[280px] sm:w-[340px] h-full">
                     <VaquinhaPublicaCard
                       vaquinha={v}
                       index={i}
@@ -619,7 +619,7 @@ export default function VaquinhasLayoutPage() {
                 ))}
               </CardCarousel>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7 auto-rows-fr">
                 {restantes.map((v, i) => (
                   <VaquinhaPublicaCard
                     key={v.id}

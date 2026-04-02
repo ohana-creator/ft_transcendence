@@ -64,7 +64,7 @@ export function CardCarousel({ children, className = '' }: CardCarouselProps) {
       {/* Container scrollável */}
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth px-1 py-2"
+        className="flex items-stretch gap-4 overflow-x-auto scrollbar-hide scroll-smooth px-1 py-2"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {children}
