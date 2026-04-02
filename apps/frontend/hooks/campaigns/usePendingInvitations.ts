@@ -20,11 +20,19 @@ type InvitationsApiResponse =
   | { data: Invitation[] }
   | { success: boolean; data: Invitation[] };
 
+type InvitationActionMeta = {
+  alreadyResponded?: boolean;
+};
+
 function normalizeInvitationsResponse(payload: InvitationsApiResponse): Invitation[] {
   if (Array.isArray(payload)) return payload;
   if ('invitations' in payload && Array.isArray(payload.invitations)) return payload.invitations;
   if ('data' in payload && Array.isArray(payload.data)) return payload.data;
   return [];
+}
+
+function hasAlreadyRespondedFlag(payload: unknown): payload is InvitationActionMeta {
+  return !!payload && typeof payload === 'object' && 'alreadyResponded' in payload;
 }
 
 async function fetchPendingInvitationsFromApi(): Promise<Invitation[]> {
@@ -87,7 +95,7 @@ export function usePendingInvitations(): UsePendingInvitationsReturn {
       const result = await acceptInvite(inviteId);
       
       // Se o convite já foi respondido anteriormente, tratar como sucesso silencioso
-      if (result?.alreadyResponded) {
+      if (hasAlreadyRespondedFlag(result) && result.alreadyResponded) {
         // Apenas remover da lista sem mostrar erro
         setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
         return;
@@ -124,7 +132,7 @@ export function usePendingInvitations(): UsePendingInvitationsReturn {
       const result = await rejectInvite(inviteId);
       
       // Se o convite já foi respondido anteriormente, tratar como sucesso silencioso
-      if (result?.alreadyResponded) {
+      if (hasAlreadyRespondedFlag(result) && result.alreadyResponded) {
         setInvitations(prev => prev.filter(inv => inv.id !== inviteId));
         return;
       }
