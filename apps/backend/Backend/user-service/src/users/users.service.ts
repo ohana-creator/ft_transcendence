@@ -187,6 +187,50 @@ export class UsersService {
     };
   }
 
+  async listFriendsByUserId(userId: string) {
+    // Verify user exists first
+    const userExists = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!userExists) {
+      return {
+        success: true,
+        data: {
+          friends: [],
+          count: 0,
+        },
+      };
+    }
+
+    const friendships = await this.prisma.friendship.findMany({
+      where: {
+        OR: [{ userAId: userId }, { userBId: userId }],
+      },
+      include: {
+        userA: { select: { id: true, username: true, avatarUrl: true } },
+        userB: { select: { id: true, username: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const friends = friendships.map((friendship) => {
+      const friend = friendship.userAId === userId ? friendship.userB : friendship.userA;
+      return {
+        id: friend.id,
+        username: friend.username,
+        nome: friend.username,
+        avatarUrl: friend.avatarUrl,
+        friendsSince: friendship.createdAt.toISOString(),
+      };
+    });
+
+    return {
+      success: true,
+      data: {
+        friends,
+        count: friends.length,
+      },
+    };
+  }
+
   async listFriendRequests(userId: string, query: ListFriendRequestsDto) {
     const direction = query.direction ?? 'incoming';
     const status = query.status ?? 'PENDING';

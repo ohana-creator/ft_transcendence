@@ -112,6 +112,27 @@ export class UsersController {
     return this.usersService.getSettings(user.userId);
   }
 
+  @Get(':id/contributions')
+  @Header('Cache-Control', 'public, max-age=300')
+  @ApiOperation({ summary: 'Get user contributions count (placeholder - returns empty)' })
+  getUserContributions(@Param('id') id: string) {
+    return {
+      success: true,
+      data: {
+        contributions: [],
+        count: 0,
+        total: 0,
+      },
+    };
+  }
+
+  @Get(':id/friends')
+  @Header('Cache-Control', 'public, max-age=300')
+  @ApiOperation({ summary: 'Get user friends list' })
+  getUserFriends(@Param('id') id: string) {
+    return this.usersService.listFriendsByUserId(id);
+  }
+
   @Get(':id')
   @Header('Cache-Control', 'public, max-age=600')
   @ApiOperation({ summary: 'Get public user profile' })
