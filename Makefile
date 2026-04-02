@@ -2,10 +2,12 @@ SHELL := /bin/bash
 
 COMPOSE_FILE := apps/backend/docker-compose.yml
 COMPOSE := docker compose -f $(COMPOSE_FILE)
+FRONTEND_DIR := apps/frontend
 
 RESET_DB ?= 0
 REBUILD ?= 1
 DETACH ?= 1
+SYNC_FRONTEND ?= 1
 
 UP_FLAGS :=
 
@@ -19,7 +21,7 @@ endif
 
 .DEFAULT_GOAL := up
 
-.PHONY: up down restart reset-db logs ps stop status help
+.PHONY: up sync-frontend down restart reset-db logs ps stop status help
 
 help:
 	@echo "Comandos disponíveis:"
@@ -30,9 +32,15 @@ help:
 	@echo "  make restart    - Reinicia o stack"
 	@echo "  make logs       - Mostra logs do stack"
 	@echo "  make ps         - Lista containers do stack"
-	@echo "Flags: RESET_DB=1 REBUILD=0 DETACH=0"
+	@echo "  make sync-frontend - Sincroniza package-lock do frontend"
+	@echo "Flags: RESET_DB=1 REBUILD=0 DETACH=0 SYNC_FRONTEND=0"
 
-up:
+sync-frontend:
+	@if [ "$(SYNC_FRONTEND)" = "1" ]; then \
+		cd $(FRONTEND_DIR) && npm install; \
+	fi
+
+up: sync-frontend
 	@if [ "$(RESET_DB)" = "1" ]; then \
 		$(COMPOSE) down -v --remove-orphans; \
 	fi
