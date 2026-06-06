@@ -50,19 +50,19 @@ model LedgerEntry {
 }
 
 model LedgerOutbox {
-  id              String        @id @default(uuid())
+  id              String           @id @default(uuid())
   stream          String
   event           String
   partitionKey    String?
   payload         Json
 
-  dedupeKey       String?       @unique
-  status          OutboxStatus  @default(PENDING)
-  attempts        Int           @default(0)
+  dedupeKey       String?          @unique
+  status          OutboxStatus      @default(PENDING)
+  attempts        Int               @default(0)
   nextAttemptAt   DateTime?
   lastError       String?
 
-  createdAt       DateTime      @default(now())
+  createdAt       DateTime          @default(now())
   publishedAt     DateTime?
 
   @@index([status, nextAttemptAt])

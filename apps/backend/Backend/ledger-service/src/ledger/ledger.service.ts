@@ -1,7 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService }      from '../database/prisma.service.js';
-import { BlockchainService }  from '../blockchain/blockchain.service.js';
 import { RedisService }       from '../redis/redis.service.js';
+import { LEDGER_ADAPTER_TOKEN, LedgerAdapter } from '../ledger-adapters/ledger-adapter.interface.js';
 import { MintDto }            from './dto/mint.dto.js';
 import { TransferDto }        from './dto/transfer.dto.js';
 import { LedgerQueryDto }     from './dto/ledger-query.dto.js';
@@ -11,11 +12,12 @@ const STREAM = 'ledger-events';
 @Injectable()
 export class LedgerService {
   private readonly logger = new Logger(LedgerService.name);
+  private readonly submissionMode = String(process.env.LEDGER_SUBMISSION_MODE ?? 'sync').toLowerCase();
 
   constructor(
     private readonly prisma:      PrismaService,
-    private readonly blockchain:  BlockchainService,
     private readonly redis:       RedisService,
+    @Inject(LEDGER_ADAPTER_TOKEN) private readonly adapter: LedgerAdapter,
   ) {}
 
   // ─── Wallet Mapping ──────────────────────────────────────
@@ -39,60 +41,115 @@ export class LedgerService {
   async mint(dto: MintDto) {
     await this.registerWallet(dto.userId, dto.walletAddress);
     const sourceTransactionId = this.extractSourceTransactionId(dto.ref);
+    const ref = dto.ref ?? `mint:${dto.userId}`;
+    const idempotencyKey = this.buildIdempotencyKey('MINT', dto.userId, ref, sourceTransactionId);
 
-    // 1. Criar entrada PENDING
+    const existing = await this.prisma.ledgerEntry.findFirst({
+      where: { userId: dto.userId, operation: 'MINT', ref, amount: dto.amount },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) return existing;
+
+    // 1. Criar entrada QUEUED
     const entry = await this.prisma.ledgerEntry.create({
       data: {
         userId:    dto.userId,
         walletAddr: dto.walletAddress,
         amount:    dto.amount,
         operation: 'MINT',
-        ref:       dto.ref ?? `mint:${dto.userId}`,
-        status:    'PENDING',
+        ref,
+        status:    'QUEUED',
+        metadata:  {
+          idempotencyKey,
+          sourceTransactionId,
+          submissionMode: this.submissionMode,
+          provider: this.adapter.network,
+        },
       },
     });
 
+    if (this.submissionMode === 'async') {
+      await this.enqueueLedgerOutboxEvent('ledger-events', 'ledger.command.submit', {
+        entryId: entry.id,
+        operation: 'MINT',
+        userId: dto.userId,
+        walletAddress: dto.walletAddress,
+        amount: dto.amount,
+        ref,
+        idempotencyKey,
+        sourceTransactionId,
+      }, `submit:${entry.id}`);
+
+      return entry;
+    }
+
     try {
-      // 2. Executar on-chain
-      const txHash = await this.blockchain.mint(
-        dto.walletAddress, dto.amount, entry.id,
+      const result = await this.adapter.mint(
+        {
+          toAddress: dto.walletAddress,
+          amountAtomic: dto.amount.toString(),
+          reference: entry.id,
+        },
+        {
+          correlationId: idempotencyKey,
+          idempotencyKey,
+          sourceTransactionId,
+          requestedBy: dto.userId,
+          metadata: { ref },
+        },
       );
 
-      // 3. Confirmar entrada
-      const tx = await this.blockchain.getTransaction(txHash);
-      const confirmed = await this.prisma.ledgerEntry.update({
+      const metadata = {
+        ...(entry.metadata as Record<string, unknown> || {}),
+        adapterResult: result,
+        confirmedAt: result.status === 'CONFIRMED' ? new Date().toISOString() : undefined,
+      };
+
+      if (result.status === 'CONFIRMED' && result.txHash) {
+        const tx = await this.adapter.getTransaction(result.txHash);
+        const confirmed = await this.prisma.ledgerEntry.update({
+          where: { id: entry.id },
+          data:  {
+            txHash: result.txHash,
+            status:      'CONFIRMED',
+            blockNumber: tx?.blockOrLedgerIndex,
+            metadata,
+          },
+        });
+
+        await this.enqueueLedgerOutboxEvent('ledger-events', 'ledger.mint.confirmed', {
+          entryId: confirmed.id,
+          userId:  dto.userId,
+          amount:  dto.amount,
+          txHash: result.txHash,
+          blockNumber: tx?.blockOrLedgerIndex,
+          sourceTransactionId,
+        }, `mint:confirmed:${confirmed.id}`);
+
+        return confirmed;
+      }
+
+      return this.prisma.ledgerEntry.update({
         where: { id: entry.id },
-        data:  {
-          txHash,
-          status:      'CONFIRMED',
-          blockNumber: tx?.blockNumber,
+        data: {
+          status: result.status === 'SUBMITTED' ? 'SUBMITTED' : 'QUEUED',
+          metadata,
         },
       });
-
-      await this.redis.publish(STREAM, 'ledger.mint.confirmed', {
-        entryId: confirmed.id,
-        userId:  dto.userId,
-        amount:  dto.amount,
-        txHash,
-        blockNumber: tx?.blockNumber,
-        sourceTransactionId,
-      });
-
-      return confirmed;
     } catch (err: any) {
       await this.prisma.ledgerEntry.update({
         where: { id: entry.id },
-        data:  { status: 'FAILED', metadata: { error: err.message } },
+        data:  { status: 'FAILED', metadata: { error: err.message, idempotencyKey, sourceTransactionId, provider: this.adapter.network } },
       });
 
-      await this.redis.publish(STREAM, 'ledger.mint.failed', {
+      await this.enqueueLedgerOutboxEvent('ledger-events', 'ledger.mint.failed', {
         entryId: entry.id,
         userId: dto.userId,
         amount: dto.amount,
         walletAddress: dto.walletAddress,
         sourceTransactionId,
         error: err.message,
-      });
+      }, `mint:failed:${entry.id}`);
       throw err;
     }
   }
@@ -101,6 +158,14 @@ export class LedgerService {
 
   async transfer(fromUserId: string, dto: TransferDto) {
     const fromAddr = await this.getWalletAddress(fromUserId);
+    const ref = `transfer:${fromUserId}→${dto.toAddress}`;
+    const idempotencyKey = this.buildIdempotencyKey('TRANSFER', fromUserId, ref);
+
+    const existing = await this.prisma.ledgerEntry.findFirst({
+      where: { userId: fromUserId, operation: 'TRANSFER', ref, amount: dto.amount },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) return existing;
 
     const entry = await this.prisma.ledgerEntry.create({
       data: {
@@ -108,35 +173,91 @@ export class LedgerService {
         walletAddr: fromAddr,
         amount:    dto.amount,
         operation: 'TRANSFER',
-        ref:       `transfer:${fromUserId}→${dto.toAddress}`,
-        status:    'PENDING',
-        metadata:  { toAddress: dto.toAddress },
+        ref,
+        status:    'QUEUED',
+        metadata:  { toAddress: dto.toAddress, idempotencyKey, provider: this.adapter.network },
       },
     });
 
-    try {
-      const txHash = await this.blockchain.transfer(dto.toAddress, dto.amount);
-      const tx     = await this.blockchain.getTransaction(txHash);
-
-      const confirmed = await this.prisma.ledgerEntry.update({
-        where: { id: entry.id },
-        data:  { txHash, status: 'CONFIRMED', blockNumber: tx?.blockNumber },
-      });
-
-      await this.redis.publish(STREAM, 'ledger.transfer.confirmed', {
-        entryId:   confirmed.id,
+    if (this.submissionMode === 'async') {
+      await this.enqueueLedgerOutboxEvent('ledger-events', 'ledger.command.submit', {
+        entryId: entry.id,
+        operation: 'TRANSFER',
         fromUserId,
+        fromAddress: fromAddr,
         toAddress: dto.toAddress,
-        amount:    dto.amount,
-        txHash,
-      });
+        amount: dto.amount,
+        ref,
+        idempotencyKey,
+      }, `submit:${entry.id}`);
 
-      return confirmed;
+      return entry;
+    }
+
+    try {
+      const result = await this.adapter.transfer(
+        {
+          fromAddress: fromAddr,
+          toAddress: dto.toAddress,
+          amountAtomic: dto.amount.toString(),
+          reference: ref,
+        },
+        {
+          correlationId: idempotencyKey,
+          idempotencyKey,
+          requestedBy: fromUserId,
+          metadata: { fromAddr, toAddress: dto.toAddress },
+        },
+      );
+      const metadata = {
+        ...(entry.metadata as Record<string, unknown> || {}),
+        adapterResult: result,
+        confirmedAt: result.status === 'CONFIRMED' ? new Date().toISOString() : undefined,
+      };
+
+      if (result.status === 'CONFIRMED' && result.txHash) {
+        const tx = await this.adapter.getTransaction(result.txHash);
+        const confirmed = await this.prisma.ledgerEntry.update({
+          where: { id: entry.id },
+          data:  {
+            txHash: result.txHash,
+            status: 'CONFIRMED',
+            blockNumber: tx?.blockOrLedgerIndex,
+            metadata,
+          },
+        });
+
+        await this.enqueueLedgerOutboxEvent('ledger-events', 'ledger.transfer.confirmed', {
+          entryId:   confirmed.id,
+          fromUserId,
+          toAddress: dto.toAddress,
+          amount:    dto.amount,
+          txHash: result.txHash,
+          blockNumber: tx?.blockOrLedgerIndex,
+        }, `transfer:confirmed:${confirmed.id}`);
+
+        return confirmed;
+      }
+
+      return this.prisma.ledgerEntry.update({
+        where: { id: entry.id },
+        data: {
+          status: result.status === 'SUBMITTED' ? 'SUBMITTED' : 'QUEUED',
+          metadata,
+        },
+      });
     } catch (err: any) {
       await this.prisma.ledgerEntry.update({
         where: { id: entry.id },
-        data:  { status: 'FAILED', metadata: { error: err.message } },
+        data:  { status: 'FAILED', metadata: { error: err.message, idempotencyKey, provider: this.adapter.network } },
       });
+      await this.enqueueLedgerOutboxEvent('ledger-events', 'ledger.transfer.failed', {
+        entryId: entry.id,
+        fromUserId,
+        toAddress: dto.toAddress,
+        amount: dto.amount,
+        error: err.message,
+      }, `transfer:failed:${entry.id}`);
       throw err;
     }
   }
@@ -146,15 +267,15 @@ export class LedgerService {
   async getBalance(userId: string) {
     const walletAddr = await this.getWalletAddress(userId);
     const [onChain, supply] = await Promise.all([
-      this.blockchain.getBalance(walletAddr),
-      this.blockchain.getTotalSupply(),
+      this.adapter.getBalance(walletAddr),
+      this.adapter.getTotalSupply(),
     ]);
-    return { userId, walletAddr, balance: onChain, totalSupply: supply };
+    return { userId, walletAddr, balance: onChain.balanceDisplay, totalSupply: supply.totalSupplyDisplay, provider: onChain.network };
   }
 
   async getBalanceByAddress(walletAddr: string) {
-    const balance = await this.blockchain.getBalance(walletAddr);
-    return { walletAddr, balance };
+    const balance = await this.adapter.getBalance(walletAddr);
+    return { walletAddr, balance: balance.balanceDisplay, provider: balance.network };
   }
 
   // ─── History ─────────────────────────────────────────────
@@ -180,7 +301,7 @@ export class LedgerService {
   async getTransaction(txHash: string) {
     const [entry, onChain] = await Promise.all([
       this.prisma.ledgerEntry.findUnique({ where: { txHash } }),
-      this.blockchain.getTransaction(txHash),
+      this.adapter.getTransaction(txHash),
     ]);
     if (!entry) throw new NotFoundException('Transaction not found in ledger');
     return { ...entry, onChain };
@@ -201,6 +322,27 @@ export class LedgerService {
       amount:        payload.amount,
       ref:           `wallet.deposit:${payload.transactionId}`,
     });
+  }
+
+  async enqueueLedgerOutboxEvent(stream: string, event: string, payload: Record<string, unknown>, dedupeKey: string) {
+    try {
+      await this.prisma.$executeRaw`
+        INSERT INTO "LedgerOutbox" ("id", "stream", "event", "payload", "dedupeKey", "status", "attempts", "createdAt")
+        VALUES (${randomUUID()}, ${stream}, ${event}, ${JSON.stringify(payload)}::jsonb, ${dedupeKey}, 'PENDING', 0, NOW())
+        ON CONFLICT ("dedupeKey") DO NOTHING
+      `;
+    } catch (error) {
+      this.logger.warn(`Outbox unavailable for ${event}: ${(error as Error).message}`);
+      await this.redis.publish(stream, event, payload);
+    }
+  }
+
+  private buildIdempotencyKey(operation: 'MINT' | 'TRANSFER' | 'BURN', userId: string, ref: string, sourceTransactionId?: string | undefined) {
+    return [operation, userId, ref, sourceTransactionId ?? ''].filter(Boolean).join(':');
+  }
+
+  private isAsyncSubmissionEnabled(): boolean {
+    return this.submissionMode === 'async';
   }
 
   private extractSourceTransactionId(ref?: string): string | undefined {

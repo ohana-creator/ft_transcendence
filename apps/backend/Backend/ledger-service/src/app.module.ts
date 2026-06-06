@@ -7,6 +7,7 @@ import { AuthModule }     from './auth/auth.module.js';
 import { BlockchainModule } from './blockchain/blockchain.module.js';
 import { LedgerModule }   from './ledger/ledger.module.js';
 import { EventsModule }   from './events/events.module.js';
+import { WorkersModule }   from './workers/workers.module.js';
 import { HealthController } from './health.controller.js';
 import { HealthService }    from './health.service.js';
 
@@ -20,6 +21,7 @@ import { HealthService }    from './health.service.js';
     BlockchainModule,
     LedgerModule,
     EventsModule,
+    WorkersModule,
   ],
   controllers: [HealthController],
   providers:   [HealthService],

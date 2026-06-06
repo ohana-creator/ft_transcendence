@@ -25,6 +25,7 @@
     "passport-jwt": "^4.0.0",
     "prisma": "^6.0.0",
     "redis": "^4.6.0",
+    "xrpl": "^4.2.1",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1"
   },

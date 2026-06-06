@@ -1,8 +1,10 @@
 import { Module }          from '@nestjs/common';
 import { LedgerController } from './ledger.controller.js';
 import { LedgerService }    from './ledger.service.js';
+import { LedgerAdaptersModule } from '../ledger-adapters/ledger-adapters.module.js';
 
 @Module({
+  imports: [LedgerAdaptersModule],
   controllers: [LedgerController],
   providers:   [LedgerService],
   exports:     [LedgerService],
