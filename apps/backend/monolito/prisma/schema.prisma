@@ -1,0 +1,377 @@
+// Unified Prisma schema for the monolith backend.
+
+generator client {
+  provider     = "prisma-client-js"
+  output       = "../node_modules/.prisma/client"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                   String       @id @default(uuid())
+  email                String       @unique
+  username             String       @unique
+  hashedPassword       String?
+  googleId             String?      @unique
+  twoFASecret          String?
+  twoFAEnabled         Boolean      @default(false)
+  twoFAEmailCode       String?
+  twoFAEmailExpiresAt   DateTime?
+  authProvider         AuthProvider @default(LOCAL)
+  avatarUrl            String?
+  bio                  String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  outgoingFriendRequests FriendRequest[] @relation("OutgoingFriendRequests")
+  incomingFriendRequests FriendRequest[] @relation("IncomingFriendRequests")
+  friendshipsAsA         Friendship[]    @relation("FriendshipsAsA")
+  friendshipsAsB         Friendship[]    @relation("FriendshipsAsB")
+  blocksMade             Block[]         @relation("BlocksMade")
+  blocksReceived         Block[]         @relation("BlocksReceived")
+  heartbeat              UserHeartbeat?
+}
+
+model UserHeartbeat {
+  id       String   @id @default(uuid())
+  userId   String   @unique
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastSeen DateTime @default(now()) @updatedAt
+
+  @@index([lastSeen])
+}
+
+model FriendRequest {
+  id          String              @id @default(uuid())
+  fromUserId  String
+  toUserId    String
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now())
+  respondedAt DateTime?
+  fromUser    User                @relation("OutgoingFriendRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser      User                @relation("IncomingFriendRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, status])
+  @@index([fromUserId, status])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+  userA     User     @relation("FriendshipsAsA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipsAsB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model Block {
+  id            String   @id @default(uuid())
+  blockerUserId String
+  blockedUserId String
+  createdAt     DateTime @default(now())
+  blocker       User     @relation("BlocksMade", fields: [blockerUserId], references: [id], onDelete: Cascade)
+  blocked       User     @relation("BlocksReceived", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerUserId, blockedUserId])
+  @@index([blockedUserId])
+}
+
+model Campaign {
+  id            String           @id @default(uuid())
+  title         String
+  description   String
+  imageUrl      String?
+  isPrivate     Boolean          @default(false)
+  goalAmount    Decimal?         @db.Decimal(18, 2)
+  goalVisible   Boolean          @default(true)
+  currentAmount Decimal          @default(0) @db.Decimal(18, 2)
+  deadline      DateTime?
+  ownerId       String
+  ownerUsername String
+  status        CampaignStatus   @default(ACTIVE)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  closedAt      DateTime?
+  members       CampaignMember[]
+  invitations   Invitation[]
+  contributions Contribution[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([isPrivate])
+}
+
+model Contribution {
+  id          String   @id @default(uuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId      String
+  username    String
+  amount      Decimal  @db.Decimal(18, 2)
+  message     String?
+  isAnonymous Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model CampaignMember {
+  id         String     @id @default(uuid())
+  campaignId String
+  campaign   Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String
+  username   String
+  role       MemberRole @default(VAKER)
+  joinedAt   DateTime   @default(now())
+
+  @@unique([campaignId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id            String       @id @default(uuid())
+  campaignId    String
+  campaign      Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  invitedUserId String?
+  invitedEmail  String?
+  inviterId     String
+  inviterName   String
+  status        InviteStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  respondedAt   DateTime?
+
+  @@index([invitedUserId])
+  @@index([campaignId])
+}
+
+model Wallet {
+  id                   String        @id @default(uuid())
+  userId               String?       @unique // FK para User.id (UUID da Auth Service) — null para wallets de campanha
+  campaignId           String?       @unique // FK para Campaign.id — null para wallets de utilizador
+  balance              Decimal       @default(0) @db.Decimal(18, 2)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  sentTransactions     Transaction[] @relation("SentTransactions")
+  receivedTransactions Transaction[] @relation("ReceivedTransactions")
+}
+
+model Transaction {
+  id           String            @id @default(uuid())
+  fromWalletId String?
+  toWalletId   String?
+  amount       Decimal           @db.Decimal(18, 2)
+  type         TransactionType
+  status       TransactionStatus @default(PENDING)
+  metadata     Json?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  fromWallet   Wallet?           @relation("SentTransactions", fields: [fromWalletId], references: [id], onDelete: SetNull)
+  toWallet     Wallet?           @relation("ReceivedTransactions", fields: [toWalletId], references: [id], onDelete: SetNull)
+
+  @@index([fromWalletId])
+  @@index([toWalletId])
+  @@index([createdAt])
+  @@index([type])
+  @@index([status])
+}
+
+model LedgerEntry {
+  id                  String             @id @default(uuid())
+  userId              String
+  walletAddr          String
+  network             LedgerNetwork      @default(XRPL)
+  operation           LedgerOperation
+  amountAtomic        Decimal            @db.Decimal(38, 0)
+  amountDisplay       Decimal            @db.Decimal(38, 6)
+  currencyCode        String             @default("VAKS")
+  idempotencyKey      String
+  sourceEventId       String?
+  sourceTransactionId String?
+  correlationId       String?
+  status              LedgerStatus       @default(QUEUED)
+  txHash              String?
+  providerSequence    String?
+  blockOrLedgerIndex  Int?
+  submitAttempts      Int                @default(0)
+  nextRetryAt         DateTime?
+  lastErrorCode       String?
+  lastErrorMessage    String?
+  metadata            Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  confirmedAt         DateTime?
+  reconciliationJobs  ReconciliationJob[]
+
+  @@unique([idempotencyKey, operation, network])
+  @@index([userId, createdAt])
+  @@index([walletAddr, createdAt])
+  @@index([sourceTransactionId])
+  @@index([status, nextRetryAt])
+  @@index([txHash])
+}
+
+model LedgerOutbox {
+  id            String       @id @default(uuid())
+  stream        String
+  event         String
+  partitionKey  String?
+  payload       Json
+  dedupeKey     String?      @unique
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime?
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  publishedAt   DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([stream, event, createdAt])
+}
+
+model ReconciliationJob {
+  id                String               @id @default(uuid())
+  ledgerEntryId     String
+  ledgerEntry       LedgerEntry          @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+  reason            ReconciliationReason
+  status            ReconciliationStatus @default(PENDING)
+  attempts          Int                  @default(0)
+  nextAttemptAt     DateTime?
+  resultSnapshot    Json?
+  lastErrorCode     String?
+  lastErrorMessage  String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  resolvedAt        DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([ledgerEntryId, status])
+}
+
+model WalletMapping {
+  id         String        @id @default(uuid())
+  userId     String        @unique
+  walletAddr String        @unique
+  network    LedgerNetwork @default(XRPL)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  metadata  Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+}
+
+enum CampaignStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum MemberRole {
+  SUDO
+  VAKER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum TransactionType {
+  P2P_TRANSFER
+  CAMPAIGN_CONTRIBUTION
+  CAMPAIGN_WITHDRAWAL
+  DEPOSIT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum LedgerNetwork {
+  EVM
+  XRPL
+}
+
+enum LedgerOperation {
+  MINT
+  TRANSFER
+  BURN
+}
+
+enum LedgerStatus {
+  QUEUED
+  SUBMITTED
+  CONFIRMED
+  FAILED
+  COMPENSATED
+}
+
+enum OutboxStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+enum ReconciliationStatus {
+  PENDING
+  RUNNING
+  RESOLVED
+  FAILED
+}
+
+enum ReconciliationReason {
+  PENDING_TIMEOUT
+  RETRYABLE_PROVIDER_ERROR
+  MANUAL_REPAIR
+  PERIODIC_AUDIT
+}
+
+enum NotificationType {
+  CAMPAIGN_CONTRIBUTION
+  CAMPAIGN_INVITE
+  WALLET_TRANSFER_SENT
+  WALLET_TRANSFER_RECEIVED
+  CAMPAIGN_GOAL_REACHED
+  CAMPAIGN_CLOSED
+  MEMBER_PROMOTED
+  TWO_FA_EMAIL_CODE_SENT
+  TWO_FA_SETUP_EMAIL_CODE
+  TWO_FA_DISABLE_EMAIL_CODE
+}
