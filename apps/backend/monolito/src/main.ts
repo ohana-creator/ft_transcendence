@@ -51,10 +51,10 @@ async function bootstrap() {
     .filter(Boolean);
 
   const devOrigins = [
-    'https://localhost:3000',
-    'https://127.0.0.1:3000',
-    'https://localhost:5173',
-    'https://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
   ];
 
   const allowedOrigins =
@@ -63,25 +63,27 @@ async function bootstrap() {
       : Array.from(new Set([...configuredOrigins, ...devOrigins]));
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
+  origin: (origin, callback) => {
+    console.log('====================');
+    console.log('Origin:', origin);
+    console.log('Allowed:', allowedOrigins);
+    console.log('====================');
 
-      const normalizedOrigin = normalizeOrigin(origin);
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
 
-      if (!allowedOrigins.length || allowedOrigins.includes(normalizedOrigin)) {
-        callback(null, true);
-        return;
-      }
+    const normalizedOrigin = normalizeOrigin(origin);
 
-      callback(new Error('Origin not allowed by CORS'), false);
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-correlation-id'],
-    credentials: true,
-  });
+    if (!allowedOrigins.length || allowedOrigins.includes(normalizedOrigin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Origin not allowed by CORS'), false);
+  },
+});
 
   await app.register(fastifyMultipart as any, {
     limits: { fileSize: 5 * 1024 * 1024 },
