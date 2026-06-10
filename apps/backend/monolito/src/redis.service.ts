@@ -1,32 +1,29 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
-import Redis from 'ioredis';
+import { ConfigService } from '@nestjs/config';
+import { Redis } from '@upstash/redis';
 
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly client: Redis;
 
-  constructor() {
-    const config = {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD || undefined,
-      lazyConnect: true,
-    };
-    this.client = new Redis(config);
+  constructor(private readonly Config: ConfigService) {
+    
+    this.client = new Redis({
+      url: this.Config.get<string>('UPSTASH_REDIS_REST_URL'), //process.env.UPSTASH_REDIS_REST_URL,
+      token: this.Config.get<string>('UPSTASH_REDIS_REST_TOKEN'),
+    });
 
-    this.client.on('connect', () => this.logger.log('Redis client connected'));
-    this.client.on('error', (err) => this.logger.error('Redis client error', err));
+    this.logger.log('Redis client connected');
   }
 
   async onModuleDestroy() {
-    await this.client.quit();
   }
 
   // ── Token Blacklist ──────────────────────────────────────
 
   async blacklistToken(jti: string, ttlSeconds: number): Promise<void> {
-    await this.client.set(`blacklist:${jti}`, '1', 'EX', ttlSeconds);
+    await this.client.set(`blacklist:${jti}`, '1', {ex: ttlSeconds});
   }
 
   async isTokenBlacklisted(jti: string): Promise<boolean> {
@@ -34,19 +31,16 @@ export class RedisService implements OnModuleDestroy {
     return result !== null;
   }
 
-  // ── Event Publishing ──────────────────────────────────────
+    // ── Event Publishing ──────────────────────────────────────
 
   async publish(stream: string, event: string, data: Record<string, any>): Promise<string> {
-    const id = await this.client.xadd(
-      stream,
-      '*',
-      'event',
-      event,
-      'payload',
-      JSON.stringify(data),
-    );
+    const id = await this.client.xadd(stream, '*', {
+  event,
+  payload: JSON.stringify(data),
+});
     if (!id) throw new Error(`Failed to publish ${event} to ${stream}`);
     this.logger.log(`Published ${event} to ${stream} (id: ${id})`);
     return id;
   }
+
 }
