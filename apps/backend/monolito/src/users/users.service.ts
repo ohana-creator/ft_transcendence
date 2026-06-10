@@ -139,22 +139,6 @@ export class UsersService {
     return updated;
   }
 
-  async createFromEvent(data: { id: string; email: string; username: string }) {
-    const user = await this.prisma.user.upsert({
-      where: { id: data.id },
-      update: {},
-      create: { id: data.id, email: data.email, username: data.username },
-    });
-
-    await this.redis.publish('user-events', 'user.created', {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-    });
-
-    return user;
-  }
-
   async listFriends(userId: string) {
     const friendships = await this.prisma.friendship.findMany({
       where: {
