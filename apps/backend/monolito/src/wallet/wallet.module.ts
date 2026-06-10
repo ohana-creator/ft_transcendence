@@ -5,10 +5,11 @@ import {
   WalletTopupInternalController,
 } from './wallet.controller.js';
 import { WalletService } from './wallet.service.js';
+import { RedisService } from '../redis/redis.service';
 
 @Module({
   controllers: [WalletController, WalletInternalController, WalletTopupInternalController],
-  providers: [WalletService],
+  providers: [WalletService, RedisService],
   exports: [WalletService],
 })
 export class WalletModule {}

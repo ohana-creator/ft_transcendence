@@ -22,13 +22,22 @@ export class AvatarService {
     this.bucket = this.config.getOrThrow<string>('R2_BUCKET');
     this.publicUrl = this.config.getOrThrow<string>('R2_PUBLIC_URL');
 
+    const endpoint = this.config.getOrThrow<string>('R2_ENDPOINT');
+    const accessKeyId = this.config.get<string>('R2_ACCESS_KEY_ID');
+    const secretAccessKey = this.config.get<string>('R2_SECRET_ACCESS_KEY');
+
+    const credentials =
+      accessKeyId && secretAccessKey
+        ? {
+            accessKeyId,
+            secretAccessKey,
+          }
+        : undefined;
+
     this.s3 = new S3Client({
       region: 'auto',
-      endpoint: this.config.getOrThrow<string>('R2_ENDPOINT'),
-      credentials: {
-        accessKeyId: this.config.getOrThrow<string>('R2_ACCESS_KEY_ID'),
-        secretAccessKey: this.config.getOrThrow<string>('R2_SECRET_ACCESS_KEY'),
-      },
+      endpoint,
+      ...(credentials ? { credentials } : {}),
     });
   }
 
