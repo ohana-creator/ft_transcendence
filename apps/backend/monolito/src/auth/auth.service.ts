@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { RedisService } from '../redis.service';
+import { EmailService } from '../notifications/email.service.js';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Prisma } from '@prisma/client';
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly redis: RedisService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ── Helpers ──────────────────────────────────────────────
@@ -85,6 +87,14 @@ export class AuthService {
     };
   }
 
+  private async ensureWalletForUser(userId: string) {
+    await this.prisma.wallet.upsert({
+      where: { userId },
+      update: {},
+      create: { userId, balance: 0 },
+    });
+  }
+
   // ── Register ─────────────────────────────────────────────
 
   async register(data: RegisterDto) {
@@ -103,13 +113,7 @@ export class AuthService {
 
       const { token } = this.generateToken(user);
 
-      // Publish event for other microservices via Redis Stream
-      await this.redis.publish('auth-events', 'user.created', {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        authProvider: user.authProvider,
-      });
+      await this.ensureWalletForUser(user.id);
 
       this.logger.log(`User registered: ${user.email}`);
 
@@ -439,12 +443,7 @@ export class AuthService {
     }
 
     if (isNewUser) {
-      await this.redis.publish('auth-events', 'user.created', {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        authProvider: user.authProvider,
-      });
+      await this.ensureWalletForUser(user.id);
     }
 
     const { token } = this.generateToken(user);
@@ -493,12 +492,7 @@ export class AuthService {
     }
 
     if (isNewUser) {
-      await this.redis.publish('auth-events', 'user.created', {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        authProvider: user.authProvider,
-      });
+      await this.ensureWalletForUser(user.id);
     }
 
     const { token } = this.generateToken(user);
@@ -547,12 +541,7 @@ export class AuthService {
     }
 
     if (isNewUser) {
-      await this.redis.publish('auth-events', 'user.created', {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        authProvider: user.authProvider,
-      });
+      await this.ensureWalletForUser(user.id);
     }
 
     const { token } = this.generateToken(user);
@@ -566,7 +555,7 @@ export class AuthService {
 
   /**
    * Generates a random 6-digit code and stores it with expiration
-   * Then publishes an event for notification-service to send via email
+    * Then sends the email directly in-process.
    */
   async request2FAEmail(identifier: string) {
     const user = await this.prisma.user.findFirst({
@@ -592,13 +581,7 @@ export class AuthService {
       },
     });
 
-    // Publish event to notification-service to send email
-    await this.redis.publish('auth-events', '2fa.email.code-generated', {
-      userId: user.id,
-      email: user.email,
-      username: user.username,
-      code,
-    });
+    await this.emailService.send2FACode(user.email, user.username, code);
 
     this.logger.log(`2FA email code generated for user ${user.id}`);
 
@@ -702,13 +685,7 @@ export class AuthService {
       },
     });
 
-    // Publish event to send email
-    await this.redis.publish('auth-events', '2fa.email.setup-code-generated', {
-      userId: user.id,
-      email: user.email,
-      username: user.username,
-      code,
-    });
+    await this.emailService.send2FASetupCode(user.email, user.username, code);
 
     this.logger.log(`2FA email setup code sent to user ${userId}`);
 
@@ -789,12 +766,7 @@ export class AuthService {
         },
       });
 
-      await this.redis.publish('auth-events', '2fa.email.disable-code-generated', {
-        userId: user.id,
-        email: user.email,
-        username: user.username,
-        code: tempCode,
-      });
+      await this.emailService.send2FADisableCode(user.email, user.username, tempCode);
 
       this.logger.log(`2FA disable code sent to user ${userId}`);
 

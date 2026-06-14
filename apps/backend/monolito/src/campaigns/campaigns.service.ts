@@ -1,10 +1,15 @@
 import {
-  Injectable, NotFoundException, ForbiddenException,
-  BadRequestException, ConflictException, Logger,
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  ConflictException,
+  Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { RedisService } from '../redis/redis.service';
+import { WalletService } from '../wallet/wallet.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { ListCampaignsDto, SortBy } from './dto/list-campaigns.dto';
@@ -14,22 +19,15 @@ import { InviteDto } from './dto/invite.dto';
 @Injectable()
 export class CampaignsService {
   private readonly logger = new Logger(CampaignsService.name);
-  private readonly walletServiceUrl: string;
-  private readonly internalApiKey: string;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
-    private readonly config: ConfigService,
-  ) {
-    this.walletServiceUrl = this.config.get<string>('WALLET_SERVICE_URL', 'https://wallet-service:3005');
-    this.internalApiKey = this.config.getOrThrow<string>('INTERNAL_API_KEY');
-  }
+    private readonly walletService: WalletService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private normalizeAmount(value: unknown): number {
-    if (typeof value === 'number') {
-      return value;
-    }
+    if (typeof value === 'number') return value;
     if (value && typeof (value as { toString?: () => string }).toString === 'function') {
       const parsed = Number((value as { toString: () => string }).toString());
       return Number.isFinite(parsed) ? parsed : 0;
@@ -58,26 +56,32 @@ export class CampaignsService {
         deadline: dto.deadline ? new Date(dto.deadline) : null,
         ownerId: userId,
         ownerUsername: username,
-        members: {
-          create: { userId, username, role: 'SUDO' },
-        },
+        members: { create: { userId, username, role: 'SUDO' } },
       },
       include: { members: true },
     });
-    await this.redis.publish('campaign-events', 'campaign.created', campaign);
+
+    await this.prisma.wallet.upsert({
+      where: { campaignId: campaign.id },
+      update: {},
+      create: { campaignId: campaign.id, balance: 0 },
+    });
+
+    await this.notifyCampaignOwner(campaign.ownerId, {
+      type: 'CAMPAIGN_CONTRIBUTION',
+      title: 'Campaign Created',
+      message: `Your campaign "${campaign.title}" has been created successfully.`,
+      metadata: { campaignId: campaign.id },
+    });
+
     return campaign;
   }
-
-  // ── List campaigns ───────────────────────────────────────
-  // Shows public campaigns + private campaigns where the user is a member
 
   async findAll(dto: ListCampaignsDto, userId?: string) {
     const { search, status, sortBy = SortBy.CREATED_AT, page = 1, limit = 10 } = dto;
     const skip = (page - 1) * limit;
 
     const where: any = {};
-
-    // Public campaigns OR private campaigns where user is a member
     if (userId) {
       where.OR = [
         { isPrivate: false },
@@ -89,7 +93,6 @@ export class CampaignsService {
 
     if (status) where.status = status;
     if (search) {
-      // Wrap existing OR conditions with AND to combine search + visibility
       const searchCondition = [
         { title: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
@@ -109,10 +112,19 @@ export class CampaignsService {
         take: limit,
         orderBy: { [sortBy]: 'desc' },
         select: {
-          id: true, title: true, description: true, imageUrl: true, isPrivate: true,
-          goalAmount: true, goalVisible: true, currentAmount: true,
-          deadline: true, ownerId: true, ownerUsername: true,
-          status: true, createdAt: true,
+          id: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          isPrivate: true,
+          goalAmount: true,
+          goalVisible: true,
+          currentAmount: true,
+          deadline: true,
+          ownerId: true,
+          ownerUsername: true,
+          status: true,
+          createdAt: true,
         },
       }),
       this.prisma.campaign.count({ where }),
@@ -168,18 +180,20 @@ export class CampaignsService {
       where: { id },
       data: { status: 'CANCELLED', closedAt: new Date() },
     });
-    await this.redis.publish('campaign-events', 'campaign.closed', updated);
+
+    await this.prisma.wallet.deleteMany({ where: { campaignId: updated.id } });
+
+    await this.notifyCampaignOwner(updated.ownerId, {
+      type: 'CAMPAIGN_CLOSED',
+      title: 'Campaign Closed',
+      message: `Campaign "${updated.title}" has been closed.`,
+      metadata: { campaignId: updated.id },
+    });
+
     return updated;
   }
 
-  // ── Contribute ───────────────────────────────────────────
-  // 1. Calls Wallet Service to debit funds (REST)
-  // 2. Updates campaign currentAmount in local DB
-  // 3. Stores contribution record
-  // 4. Publishes contribution.completed event
-
   async contribute(id: string, userId: string, username: string, dto: ContributeDto) {
-    // Validate campaign state before calling Wallet Service
     const campaign = await this.prisma.campaign.findUnique({ where: { id } });
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.status !== 'ACTIVE') throw new BadRequestException('Campaign is not active');
@@ -192,8 +206,6 @@ export class CampaignsService {
     }
 
     const normalizedMessage = dto.message?.trim() ? dto.message.trim() : null;
-
-    // ── Step 1: Call Wallet Service to debit funds ──────────
     const walletPayload = {
       userId,
       campaignId: id,
@@ -201,23 +213,14 @@ export class CampaignsService {
       campaignTitle: campaign.title,
     };
 
-    const walletResponse = await fetch(`${this.walletServiceUrl}/wallet/campaign/contribute`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-api-key': this.internalApiKey,
-      },
-      body: JSON.stringify(walletPayload),
-    });
-
-    if (!walletResponse.ok) {
-      const error = await walletResponse.json().catch(() => ({}));
-      const message = error.message || 'Failed to debit funds from wallet';
+    try {
+      await this.walletService.contributeToCampaign(walletPayload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Wallet debit failed for campaign ${id}: ${message}`);
-      throw new BadRequestException(message);
+      throw error;
     }
 
-    // ── Step 2: Update campaign progress and store contribution (with saga compensation) ──
     let result: { updated: any; goalReached: boolean; contribution: any };
     try {
       result = await this.prisma.$transaction(async (tx) => {
@@ -227,12 +230,10 @@ export class CampaignsService {
         });
         if (!updated) throw new NotFoundException('Campaign not found');
 
-        // Re-validate campaign is still active inside the transaction
         if (updated.status !== 'ACTIVE') {
           throw new BadRequestException('Campaign is no longer active');
         }
 
-        // Store contribution record
         const contribution = await tx.contribution.create({
           data: {
             campaignId: id,
@@ -244,7 +245,6 @@ export class CampaignsService {
           },
         });
 
-        // Auto-complete if goal reached
         let goalReached = false;
         const newAmount = Number(updated.currentAmount);
         if (updated.goalAmount && newAmount >= Number(updated.goalAmount)) {
@@ -255,24 +255,15 @@ export class CampaignsService {
         return { updated, goalReached, contribution };
       });
     } catch (dbError) {
-      // ── Saga Compensation: refund wallet if campaign DB update failed ──
       this.logger.error(
         `Campaign DB update failed for ${id} after wallet debit — initiating refund`,
         dbError,
       );
 
       try {
-        await fetch(`${this.walletServiceUrl}/wallet/campaign/refund`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-internal-api-key': this.internalApiKey,
-          },
-          body: JSON.stringify(walletPayload),
-        });
+        await this.walletService.refundContribution(walletPayload);
         this.logger.log(`Saga refund succeeded for campaign ${id}, userId=${userId}`);
       } catch (refundError) {
-        // Critical: the refund itself failed — needs manual intervention
         this.logger.error(
           `CRITICAL: Saga refund FAILED for campaign ${id}, userId=${userId}, amount=${dto.amount}. Manual intervention required.`,
           refundError,
@@ -282,26 +273,30 @@ export class CampaignsService {
       throw dbError;
     }
 
-    // ── Step 3: Publish events outside the transaction ──────
-    await this.redis.publish('campaign-events', 'contribution.completed', {
-      campaignId: id,
-      contributionId: result.contribution.id,
+    await this.notifications.create({
       userId,
-      username: dto.isAnonymous ? 'Anónimo' : username,
-      amount: dto.amount,
-      message: normalizedMessage,
-      isAnonymous: dto.isAnonymous ?? false,
+      type: 'CAMPAIGN_CONTRIBUTION',
+      title: 'Contribution Confirmed',
+      message: `Your contribution of ${dto.amount} VAKS has been confirmed.`,
+      metadata: {
+        campaignId: id,
+        transactionId: result.contribution.id,
+        amount: dto.amount,
+      },
     });
 
     if (result.goalReached) {
-      await this.redis.publish('campaign-events', 'goal.reached', {
-        campaignId: id,
-        goalAmount: campaign.goalAmount,
+      await this.notifications.create({
+        userId: campaign.ownerId,
+        type: 'CAMPAIGN_GOAL_REACHED',
+        title: 'Goal Reached!',
+        message: `Campaign "${campaign.title}" has reached its funding goal!`,
+        metadata: { campaignId: id },
       });
     }
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       currentAmount: result.updated.currentAmount,
       contribution: {
         id: result.contribution.id,
@@ -312,8 +307,6 @@ export class CampaignsService {
       },
     };
   }
-
-  // ── Members ──────────────────────────────────────────────
 
   async getContributions(id: string, userId: string, page = 1, limit = 10) {
     const campaign = await this.prisma.campaign.findUnique({ where: { id } });
@@ -327,7 +320,6 @@ export class CampaignsService {
     }
 
     const skip = (page - 1) * limit;
-
     const [contributions, total] = await Promise.all([
       this.prisma.contribution.findMany({
         where: { campaignId: id },
@@ -347,7 +339,6 @@ export class CampaignsService {
       this.prisma.contribution.count({ where: { campaignId: id } }),
     ]);
 
-    // Map contributions to hide username if anonymous
     const mappedContributions = contributions.map((c) => ({
       id: c.id,
       campaignId: id,
@@ -362,12 +353,7 @@ export class CampaignsService {
     return {
       contributions: mappedContributions,
       data: mappedContributions,
-      meta: { 
-        total, 
-        page, 
-        limit, 
-        pages: Math.ceil(total / limit),
-      },
+      meta: { total, page, limit, pages: Math.ceil(total / limit) },
       summary: {
         currentAmount: this.normalizeAmount(campaign.currentAmount),
         goalAmount: campaign.goalAmount ? this.normalizeAmount(campaign.goalAmount) : null,
@@ -376,7 +362,6 @@ export class CampaignsService {
   }
 
   async getMembers(id: string, userId: string, page = 1, limit = 10) {
-    // Verify the campaign exists and user has visibility
     const campaign = await this.prisma.campaign.findUnique({ where: { id } });
     if (!campaign) throw new NotFoundException('Campaign not found');
 
@@ -392,6 +377,7 @@ export class CampaignsService {
       this.prisma.campaignMember.findMany({ where: { campaignId: id }, skip, take: limit }),
       this.prisma.campaignMember.count({ where: { campaignId: id } }),
     ]);
+
     return { members, meta: { total, page, limit, pages: Math.ceil(total / limit) } };
   }
 
@@ -427,29 +413,24 @@ export class CampaignsService {
     });
   }
 
-  // ── Invitations ──────────────────────────────────────────
-
   async invite(campaignId: string, inviterId: string, inviterName: string, dto: InviteDto) {
     if (!dto.userId && !dto.email) throw new BadRequestException('Provide userId or email');
 
     const campaign = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
 
-    // Verify that the inviter is a member with permissions
     const inviterMember = await this.prisma.campaignMember.findUnique({
       where: { campaignId_userId: { campaignId, userId: inviterId } },
     });
     const canInvite = campaign.ownerId === inviterId || inviterMember?.role === 'SUDO';
     if (!canInvite) throw new ForbiddenException('Only SUDO or owner can invite');
 
-    // Check if user is already a member
     if (dto.userId) {
       const existingMember = await this.prisma.campaignMember.findUnique({
         where: { campaignId_userId: { campaignId, userId: dto.userId } },
       });
       if (existingMember) throw new ConflictException('User is already a member');
 
-      // Check if there's already a pending invitation for this user
       const existingInvite = await this.prisma.invitation.findFirst({
         where: { campaignId, invitedUserId: dto.userId, status: 'PENDING' },
       });
@@ -473,15 +454,13 @@ export class CampaignsService {
       },
     });
 
-    // In-app notifications are user-bound; email-only invites are handled outside this flow.
     if (invitation.invitedUserId) {
-      await this.redis.publish('campaign-events', 'campaign.invited', {
-        campaignId,
-        campaignTitle: campaign.title,
-        invitationId: invitation.id,
-        inviterId,
-        inviterName,
-        invitedUserId: invitation.invitedUserId,
+      await this.notifications.create({
+        userId: invitation.invitedUserId,
+        type: 'CAMPAIGN_INVITE',
+        title: 'Campaign Invitation',
+        message: `${inviterName} invited you to join campaign "${campaign.title}".`,
+        metadata: { campaignId, invitationId: invitation.id },
       });
     }
 
@@ -489,7 +468,6 @@ export class CampaignsService {
   }
 
   async getInvitations(campaignId: string, userId: string) {
-    // Only members/owner can see invitations
     const campaign = await this.prisma.campaign.findUnique({ where: { id: campaignId } });
     if (!campaign) throw new NotFoundException('Campaign not found');
 
@@ -507,10 +485,7 @@ export class CampaignsService {
     return this.prisma.invitation.findMany({
       where: {
         status: 'PENDING',
-        OR: [
-          { invitedUserId: userId },
-          { invitedEmail: email }
-        ]
+        OR: [{ invitedUserId: userId }, { invitedEmail: email }],
       },
       include: {
         campaign: {
@@ -519,23 +494,20 @@ export class CampaignsService {
             title: true,
             description: true,
             ownerUsername: true,
-            isPrivate: true
-          }
-        }
+            isPrivate: true,
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
     });
   }
 
   async respondInvitation(invitationId: string, userId: string, email: string, username: string, accept: boolean) {
     const invitation = await this.prisma.invitation.findUnique({ where: { id: invitationId } });
     if (!invitation) throw new NotFoundException('Invitation not found');
-    
-    // Check if invitation is for this user (by ID OR email)
+
     const isUserInvitation = invitation.invitedUserId === userId || invitation.invitedEmail === email;
     if (!isUserInvitation) throw new ForbiddenException('Not your invitation');
-    
-    // If already responded, return the current state silently instead of throwing error
+
     if (invitation.status !== 'PENDING') {
       return {
         ...invitation,
@@ -548,7 +520,6 @@ export class CampaignsService {
       const campaign = await this.prisma.campaign.findUnique({ where: { id: invitation.campaignId } });
       if (!campaign) throw new NotFoundException('Campaign not found');
 
-      // Use upsert to handle edge case where member was re-invited after removal
       await this.prisma.campaignMember.upsert({
         where: { campaignId_userId: { campaignId: invitation.campaignId, userId } },
         update: { role: 'VAKER' },
@@ -568,16 +539,36 @@ export class CampaignsService {
   }
 
   async handleUserUpdated(payload: { id: string; username: string }) {
-    // Update username in campaign members
     await this.prisma.campaignMember.updateMany({
       where: { userId: payload.id },
       data: { username: payload.username },
     });
 
-    // Update ownerUsername in campaigns owned by this user
     await this.prisma.campaign.updateMany({
       where: { ownerId: payload.id },
       data: { ownerUsername: payload.username },
     });
+  }
+
+  private async notifyCampaignOwner(
+    userId: string,
+    notification: {
+      type: NotificationType;
+      title: string;
+      message: string;
+      metadata?: Record<string, any>;
+    },
+  ) {
+    try {
+      await this.notifications.create({
+        userId,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        metadata: notification.metadata,
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to create campaign notification: ${String(error)}`);
+    }
   }
 }

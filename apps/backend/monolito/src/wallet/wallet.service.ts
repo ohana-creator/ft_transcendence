@@ -1,6 +1,5 @@
 import { PrismaService } from "src/database/prisma.service";
 import { Wallet } from "@prisma/client";
-import { RedisService } from "src/redis/redis.service";
 import { UnauthorizedException,
     NotFoundException,
     BadRequestException,
@@ -8,6 +7,7 @@ import { UnauthorizedException,
     Injectable,
     Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { NotificationsService } from "src/notifications/notifications.service";
 import { TransferDto } from "./dto/transfer.dto";
 import { DepositDto } from "./dto/deposit.dto";
 import { TransactionsQueryDto } from "./dto/transactions-query.dto";
@@ -15,8 +15,6 @@ import { CampaignContributeDto } from "./dto/campaign-contribute.dto";
 import { TopupDto } from "./dto/topup.dto";
 import { ConfirmTopupDto } from "./dto/confirm-topup.dto";
 import { randomUUID } from "node:crypto";
-
-const STREAM = 'wallet-events';
 
 type LedgerMintConfirmedPayload = {
     entryId?: string;
@@ -39,15 +37,13 @@ type LedgerMintFailedPayload = {
 export class WalletService
 {
     private readonly logger = new Logger(WalletService.name);
-    private readonly userServiceUrl?: string;
 
     constructor(
         private readonly conn: PrismaService,
-        private readonly redis: RedisService,
+        private readonly notifications: NotificationsService,
         private readonly config: ConfigService,
     )
     {
-        this.userServiceUrl = this.config.get<string>('USER_SERVICE_URL');
     }
 
     async createWallet(userId: string, initialBalance: number = 0)
@@ -208,8 +204,7 @@ export class WalletService
                 timeout: 10000,
             });
 
-            // Publish event for Notification Service
-            await this.redis.publish(STREAM, 'transfer.completed', {
+            await this.notifyTransferCompleted({
                 transactionId: result.transaction.id,
                 fromUserId,
                 toUserId,
@@ -226,16 +221,7 @@ export class WalletService
                     'P2P_TRANSFER', amount, error as Error,
                     { fromUserId, toUserId, note, fromUsername, toUsername },
                 );
-
-                await this.redis.publish(STREAM, 'transfer.failed', {
-                    transactionId: failedTx?.id ?? null,
-                    fromUserId,
-                    toUserId,
-                    fromUsername,
-                    toUsername,
-                    amount,
-                    reason: error.message,
-                });
+                void failedTx;
             }
             throw error;
         }
@@ -364,12 +350,6 @@ export class WalletService
             });
 
             // Publish event
-            await this.redis.publish(STREAM, 'wallet.deposit', {
-                transactionId: result.transaction.id,
-                userId,
-                amount,
-            });
-
             return result;
         } catch (error: unknown) {
             if (error instanceof NotFoundException) {
@@ -378,12 +358,6 @@ export class WalletService
                     { userId, note },
                 );
 
-                await this.redis.publish(STREAM, 'wallet.deposit.failed', {
-                    transactionId: failedTx?.id ?? null,
-                    userId,
-                    amount,
-                    reason: error.message,
-                });
             }
             throw error;
         }
@@ -533,12 +507,7 @@ export class WalletService
             timeout: 10000,
         });
 
-        await this.redis.publish(STREAM, 'wallet.deposit.reversed', {
-            transactionId,
-            userId: payload.userId,
-            amount,
-            reason: payload.error ?? 'BLOCKCHAIN_MINT_FAILED',
-        });
+        // No cross-service event bus in monolith; reconciliation stays local.
     }
 
     // ── Audit helper ─────────────────────────────────────────
@@ -657,7 +626,7 @@ export class WalletService
                 timeout: 10000,
             });
 
-            await this.redis.publish(STREAM, 'contribution.completed', {
+            await this.notifyContributionCompleted({
                 transactionId: result.transaction.id,
                 userId,
                 campaignId,
@@ -741,13 +710,6 @@ export class WalletService
         }, {
             isolationLevel: 'Serializable',
             timeout: 10000,
-        });
-
-        await this.redis.publish(STREAM, 'contribution.reversed', {
-            transactionId: result.transaction.id,
-            userId,
-            campaignId,
-            amount,
         });
 
         this.logger.warn(`Refunded ${amount} to userId=${userId} for campaign ${campaignId} (saga compensation)`);
@@ -838,28 +800,30 @@ export class WalletService
             return identifier;
         }
 
-        // Tenta resolver via user-service search endpoint
-        if (this.userServiceUrl) {
-            try {
-                const response = await fetch(`${this.userServiceUrl}/users/search?q=${encodeURIComponent(identifier)}`, { method: 'GET' });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (Array.isArray(data) && data.length > 0) {
-                        return data[0].id;
-                    }
+        const exactMatch = await this.conn.user.findFirst({
+            where: {
+                OR: [
+                    { email: identifier },
+                    { username: identifier },
+                ],
+            },
+            select: { id: true },
+        });
+        if (exactMatch) {
+            return exactMatch.id;
+        }
 
-                    if (
-                        data &&
-                        typeof data === 'object' &&
-                        Array.isArray((data as { users?: Array<{ id: string }> }).users) &&
-                        (data as { users: Array<{ id: string }> }).users.length > 0
-                    ) {
-                        return (data as { users: Array<{ id: string }> }).users[0].id;
-                    }
-                }
-            } catch (error) {
-                this.logger.warn(`Failed to resolve identifier ${identifier}: ${error}`);
-            }
+        const partialMatch = await this.conn.user.findFirst({
+            where: {
+                OR: [
+                    { email: { contains: identifier, mode: 'insensitive' } },
+                    { username: { contains: identifier, mode: 'insensitive' } },
+                ],
+            },
+            select: { id: true },
+        });
+        if (partialMatch) {
+            return partialMatch.id;
         }
 
         throw new NotFoundException(`USER_NOT_FOUND: ${identifier}`);
@@ -907,28 +871,76 @@ export class WalletService
 
     private async getUserProfile(userId: string): Promise<{ id: string; username?: string }>
     {
-        if (!this.userServiceUrl) {
-            return { id: userId };
-        }
+        const user = await this.conn.user.findUnique({
+            where: { id: userId },
+            select: { id: true, username: true },
+        });
 
-        const response = await fetch(`${this.userServiceUrl}/users/${userId}`, { method: 'GET' });
-        if (response.status === 404) {
+        if (!user) {
             throw new NotFoundException('RECIPIENT_USER_NOT_FOUND');
         }
-        if (!response.ok) {
-            this.logger.warn(`Could not resolve user profile for ${userId}, status=${response.status}`);
-            return { id: userId };
-        }
 
-        const data = await response.json().catch(() => null);
-        if (!data || typeof data !== 'object') {
-            return { id: userId };
-        }
+        return user;
+    }
 
-        return {
-            id: (data as any).id ?? userId,
-            username: (data as any).username,
-        };
+    private async notifyTransferCompleted(payload: {
+        transactionId: string;
+        fromUserId: string;
+        toUserId: string;
+        fromUsername: string;
+        toUsername: string;
+        amount: number;
+    }) {
+        try {
+            await this.notifications.create({
+                userId: payload.fromUserId,
+                type: 'WALLET_TRANSFER_SENT',
+                title: 'Transfer Sent',
+                message: `You sent ${payload.amount} VAKS to ${payload.toUsername}.`,
+                metadata: {
+                    transactionId: payload.transactionId,
+                    toUserId: payload.toUserId,
+                    amount: payload.amount,
+                },
+            });
+
+            await this.notifications.create({
+                userId: payload.toUserId,
+                type: 'WALLET_TRANSFER_RECEIVED',
+                title: 'Transfer Received',
+                message: `You received ${payload.amount} VAKS from ${payload.fromUsername}.`,
+                metadata: {
+                    transactionId: payload.transactionId,
+                    fromUserId: payload.fromUserId,
+                    amount: payload.amount,
+                },
+            });
+        } catch (error) {
+            this.logger.warn(`Failed to create transfer notifications: ${String(error)}`);
+        }
+    }
+
+    private async notifyContributionCompleted(payload: {
+        transactionId: string;
+        userId: string;
+        campaignId: string;
+        amount: number;
+    }) {
+        try {
+            await this.notifications.create({
+                userId: payload.userId,
+                type: 'CAMPAIGN_CONTRIBUTION',
+                title: 'Contribution Confirmed',
+                message: `Your contribution of ${payload.amount} VAKS has been confirmed.`,
+                metadata: {
+                    campaignId: payload.campaignId,
+                    transactionId: payload.transactionId,
+                    amount: payload.amount,
+                },
+            });
+        } catch (error) {
+            this.logger.warn(`Failed to create contribution notification: ${String(error)}`);
+        }
     }
 
     private mergeMetadata(current: unknown, extra: Record<string, any>): Record<string, any>

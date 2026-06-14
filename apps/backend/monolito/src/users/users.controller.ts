@@ -63,13 +63,8 @@ export class UsersController {
   @Get('me/contributions/years')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get years with user contributions' })
-  getMyContributionYears(
-    @Req() req: FastifyRequest,
-  ) {
-    const authHeader = typeof req.headers.authorization === 'string'
-      ? req.headers.authorization
-      : undefined;
-    return this.usersService.getContributionYears(authHeader);
+  getMyContributionYears(@CurrentUser() user: { userId: string }) {
+    return this.usersService.getContributionYears(user.userId);
   }
 
   @UseGuards(JwtAuthGuard)

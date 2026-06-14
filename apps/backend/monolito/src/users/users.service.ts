@@ -7,7 +7,6 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { RedisService } from '../redis/redis.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
 import { CreateFriendRequestDto } from './dto/create-friend-request.dto';
@@ -32,12 +31,7 @@ type WalletTransactionsResponse = {
 
 @Injectable()
 export class UsersService {
-  private readonly walletServiceUrl = process.env.WALLET_SERVICE_URL;
-
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string) {
     const user = await this.prisma.user.findUnique({
@@ -92,7 +86,10 @@ export class UsersService {
       select: { id: true, username: true, avatarUrl: true, bio: true, updatedAt: true },
     });
 
-    await this.redis.publish('user-events', 'user.updated', updated);
+    if (dto.username) {
+      await this.syncUsernameAcrossCampaigns(updated.id, updated.username);
+    }
+
     return updated;
   }
 
@@ -124,7 +121,6 @@ export class UsersService {
       data: { avatarUrl },
       select: { id: true, avatarUrl: true },
     });
-    await this.redis.publish('user-events', 'user.updated', updated);
     return updated;
   }
 
@@ -135,7 +131,6 @@ export class UsersService {
       data: { avatarUrl: null },
       select: { id: true, avatarUrl: true },
     });
-    await this.redis.publish('user-events', 'user.updated', updated);
     return updated;
   }
 
@@ -587,8 +582,8 @@ export class UsersService {
     });
 
     const [contributionsCount, saldoVaks] = await Promise.all([
-      this.getContributionsCount(authHeader),
-      this.getWalletBalance(authHeader),
+      this.getContributionsCount(userId),
+      this.getWalletBalance(userId),
     ]);
 
     return {
@@ -604,7 +599,7 @@ export class UsersService {
 
   async getContributionHeatmap(userId: string, query: HeatmapQueryDto, authHeader?: string) {
     const timezone = 'Africa/Luanda';
-    const transactions = await this.fetchWalletTransactions(authHeader, 'CAMPAIGN_CONTRIBUTION');
+    const transactions = await this.fetchWalletTransactions(userId, 'CAMPAIGN_CONTRIBUTION');
 
     const from = query.month
       ? new Date(Date.UTC(query.year, query.month - 1, 1))
@@ -648,9 +643,9 @@ export class UsersService {
     };
   }
 
-  async getContributionYears(authHeader?: string) {
+  async getContributionYears(userId: string) {
     const timezone = 'Africa/Luanda';
-    const transactions = await this.fetchWalletTransactions(authHeader, 'CAMPAIGN_CONTRIBUTION');
+    const transactions = await this.fetchWalletTransactions(userId, 'CAMPAIGN_CONTRIBUTION');
 
     const years = Array.from(
       new Set(
@@ -671,74 +666,71 @@ export class UsersService {
     return first < second ? [first, second] : [second, first];
   }
 
-  private async getContributionsCount(authHeader?: string): Promise<number> {
-    const txs = await this.fetchWalletTransactions(authHeader, 'CAMPAIGN_CONTRIBUTION');
+  private async getContributionsCount(userId: string): Promise<number> {
+    const txs = await this.fetchWalletTransactions(userId, 'CAMPAIGN_CONTRIBUTION');
     return txs.filter((tx) => tx.status === 'COMPLETED').length;
   }
 
-  private async getWalletBalance(authHeader?: string): Promise<number> {
-    if (!this.walletServiceUrl || !authHeader) return 0;
+  private async getWalletBalance(userId: string): Promise<number> {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { balance: true },
+    });
 
-    try {
-      const response = await fetch(`${this.walletServiceUrl}/wallet/balance`, {
-        headers: { authorization: authHeader },
-      });
-      if (!response.ok) return 0;
-
-      const payload = (await response.json()) as { balance?: string | number };
-      const rawBalance = payload?.balance ?? 0;
-      const parsed = Number(rawBalance);
-      return Number.isFinite(parsed) ? parsed : 0;
-    } catch {
-      return 0;
-    }
+    const parsed = Number(wallet?.balance ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  private async fetchWalletTransactions(authHeader?: string, type?: string): Promise<WalletTransaction[]> {
-    if (!this.walletServiceUrl || !authHeader) return [];
+  private async fetchWalletTransactions(userId: string, type?: string): Promise<WalletTransaction[]> {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
 
-    const transactions: WalletTransaction[] = [];
-    let page = 1;
-    let totalPages = 1;
+    if (!wallet) return [];
 
-    while (page <= totalPages) {
-      const url = new URL(`${this.walletServiceUrl}/wallet/transactions`);
-      url.searchParams.set('page', String(page));
-      url.searchParams.set('limit', '100');
-      if (type) {
-        url.searchParams.set('type', type);
-      }
-
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          headers: {
-            authorization: authHeader,
-          },
-        });
-      } catch {
-        break;
-      }
-
-      if (!response.ok) {
-        break;
-      }
-
-      let payload: WalletTransactionsResponse;
-      try {
-        payload = (await response.json()) as WalletTransactionsResponse;
-      } catch {
-        break;
-      }
-      if (Array.isArray(payload.data)) {
-        transactions.push(...payload.data);
-      }
-
-      totalPages = payload.pagination?.totalPages ?? page;
-      page += 1;
+    const where: any = {
+      OR: [
+        { fromWalletId: wallet.id },
+        { toWalletId: wallet.id },
+      ],
+    };
+    if (type) {
+      where.type = type;
     }
 
-    return transactions;
+    const transactions = await this.prisma.transaction.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        amount: true,
+        createdAt: true,
+      },
+    });
+
+    return transactions.map((tx) => ({
+      id: tx.id,
+      type: tx.type,
+      status: tx.status,
+      amount: tx.amount.toString(),
+      createdAt: tx.createdAt.toISOString(),
+    }));
+  }
+
+  private async syncUsernameAcrossCampaigns(userId: string, username: string) {
+    await this.prisma.campaignMember.updateMany({
+      where: { userId },
+      data: { username },
+    });
+
+    await this.prisma.campaign.updateMany({
+      where: { ownerId: userId },
+      data: { ownerUsername: username },
+    });
   }
 
   private toLocalDate(date: Date, timeZone: string): string {
