@@ -1,4 +1,4 @@
-import { PrismaService } from "src/database/prisma.service";
+import { PrismaService } from "../database/prisma.service";
 import { Wallet } from "@prisma/client";
 import { UnauthorizedException,
     NotFoundException,
@@ -7,7 +7,7 @@ import { UnauthorizedException,
     Injectable,
     Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { NotificationsService } from "src/notifications/notifications.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { TransferDto } from "./dto/transfer.dto";
 import { DepositDto } from "./dto/deposit.dto";
 import { TransactionsQueryDto } from "./dto/transactions-query.dto";
