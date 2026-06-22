@@ -67,8 +67,8 @@ export default function LoginPage() {
       }, { skipAuth: true });
 
       const responseData = response;
-      const resolvedUser = response.user;
-      const resolvedToken = response.accessToken || response.token || response.tempToken;
+      const resolvedUser = response.data.user;
+      const resolvedToken = response.data.accessToken || response.data.token || response.tempToken;
       const shouldUseTwoFA = response?.requiresTwoFA !== false;
 
       if (response.success && resolvedToken) {
