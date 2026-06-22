@@ -66,7 +66,7 @@ export default function LoginPage() {
         password,
       }, { skipAuth: true });
 
-      const responseData = response;
+      const responseData = response?.data;
       const resolvedUser = response.data.user;
       const resolvedToken = response.data.accessToken || response.data.token || response.tempToken;
       const shouldUseTwoFA = response?.requiresTwoFA !== false;
