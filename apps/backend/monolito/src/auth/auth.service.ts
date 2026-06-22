@@ -79,11 +79,7 @@ export class AuthService {
       accessToken: token,
       token,
       user: safeUser,
-      data: {
-        user: safeUser,
-        accessToken: token,
-        token,
-      },
+
     };
   }
 
